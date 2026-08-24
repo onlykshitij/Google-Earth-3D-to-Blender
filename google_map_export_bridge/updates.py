@@ -72,6 +72,72 @@ def latest_release():
     return tag or None
 
 
+PACKAGE_ID = "google_map_export_bridge"
+
+# What the last update attempt did, for the preferences panel to show. The
+# install runs off the operator stack, so it cannot report through an operator.
+STATUS = {"state": "", "message": ""}
+
+
+def _set_status(state, message):
+    STATUS["state"] = state
+    STATUS["message"] = message
+    print("[google-map-export-bridge] %s" % message)
+
+
+def install_latest(context=None):
+    """
+    Register the feed, refresh it, and install the newest release.
+
+    Deliberately *not* called from inside an operator. Blender reloads its
+    extension state during the install, and doing that while a Python operator
+    is still on the stack crashes it - reproducibly, with an access violation in
+    RNA path resolution. So this runs from a one-shot timer instead, once the
+    operator has returned. Returning None unregisters the timer.
+    """
+    import bpy
+
+    context = context or bpy.context
+    try:
+        register_repo(context)
+    except RuntimeError as exc:
+        _set_status("error", str(exc))
+        return None
+
+    index = find_repo_index(context)
+    if index < 0:
+        _set_status("error", "The release feed could not be registered.")
+        return None
+
+    try:
+        bpy.ops.extensions.repo_sync_all()
+    except Exception as exc:                            # noqa: BLE001
+        _set_status("error", "Could not reach the release feed: %s" % exc)
+        return None
+
+    try:
+        bpy.ops.extensions.package_install(
+            repo_index=index, pkg_id=PACKAGE_ID, enable_on_install=True)
+    except Exception as exc:                            # noqa: BLE001
+        _set_status("error", "Install failed: %s" % exc)
+        return None
+
+    _set_status("done", "Update installed. Restart Blender to finish.")
+    return None
+
+
+def find_repo_index(context):
+    """Position of our repository in Blender's list, or -1. The install
+    operator addresses repositories by index, not by name."""
+    extensions = getattr(context.preferences, "extensions", None)
+    if extensions is None:
+        return -1
+    for index, repo in enumerate(extensions.repos):
+        if repo.module == REPO_MODULE or getattr(repo, "remote_url", "") == INDEX_URL:
+            return index
+    return -1
+
+
 def find_repo(context):
     """The registered repository for this add-on, if there is one."""
     extensions = getattr(context.preferences, "extensions", None)

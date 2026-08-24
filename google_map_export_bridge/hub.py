@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.1.3"
+VERSION = "1.1.4"
 
 DEFAULT_PORT = 8777
 

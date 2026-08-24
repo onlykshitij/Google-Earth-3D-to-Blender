@@ -77,6 +77,9 @@ class Job:
         self.textures_missing = 0
         # Tiles Google served blank. The geometry is real; the imagery is not.
         self.textures_blank = 0
+        # Tiles that came back blank but were good before, so the earlier
+        # picture was kept.
+        self.textures_restored = 0
         self.report = None      # obj_transform.ObjTransformResult
         self.import_summary = None
         self.cancelled = False
@@ -118,6 +121,7 @@ class Job:
                 "achievedLevel": self.achieved_level,
                 "texturesFailed": self.textures_failed,
                 "texturesBlank": self.textures_blank,
+                "texturesRestored": self.textures_restored,
                 "texturesMissing": self.textures_missing,
             }
         return d
@@ -326,6 +330,16 @@ class JobManager:
         cmd = [node, script, "--bbox=" + bbox_arg,
                "--level=%d" % int(params["level"])]
 
+        cache = params.get("texture_cache")
+        if cache:
+            try:
+                os.makedirs(cache, exist_ok=True)
+                cmd.append("--texture-cache=" + cache)
+            except OSError as exc:
+                # Not worth failing the export over; it only costs the ability
+                # to keep a good texture from a previous run.
+                print("[google-map-export-bridge] no texture cache: %s" % exc)
+
         self._set(phase=PHASE_DOWNLOADING,
                   message="Starting export at detail level %d..." % params["level"],
                   progress=0.01)
@@ -365,9 +379,15 @@ class JobManager:
                     elif event == "textures":
                         failed = int(data.get("failed", 0) or 0)
                         blank = int(data.get("blank", 0) or 0)
+                        restored = int(data.get("restored", 0) or 0)
                         job.textures_failed = failed
                         job.textures_blank = blank
-                        if failed or blank:
+                        job.textures_restored = restored
+                        if restored:
+                            self._set(message="Kept %d texture%s from an "
+                                              "earlier run" % (restored,
+                                              "" if restored == 1 else "s"))
+                        elif failed or blank:
                             self._set(message="%d tile%s without imagery"
                                               % (failed + blank,
                                                  "" if failed + blank == 1

@@ -85,6 +85,17 @@ export function ProgressCard({
         </p>
       )}
 
+      {done && job.model && job.model.texturesRestored > 0 && (
+        <p className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-2 text-[11px] leading-snug text-ink-400">
+          <strong className="font-medium text-ink-300">
+            Kept {job.model.texturesRestored} texture
+            {job.model.texturesRestored === 1 ? "" : "s"} from an earlier run.
+          </strong>{" "}
+          Google returned {job.model.texturesRestored === 1 ? "that tile" : "those tiles"}{" "}
+          blank this time, so the picture already downloaded was used instead.
+        </p>
+      )}
+
       {done && job.model && job.model.texturesBlank > 0 && (
         <p className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-2 text-[11px] leading-snug text-ink-400">
           <strong className="font-medium text-ink-300">

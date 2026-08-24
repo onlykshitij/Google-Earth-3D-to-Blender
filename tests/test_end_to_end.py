@@ -303,6 +303,31 @@ if job and job.phase == jobs.PHASE_DONE:
     check("texture files resolved",
           all(n.image and n.image.size[0] > 0 for n in tex_nodes))
 
+# --- the update button must not take Blender down with it --------------------
+# Installing an extension while a Python operator is still on the stack crashes
+# Blender with an access violation, so the operator only schedules the install.
+# This exercises the safe branch and proves the wiring is intact.
+from google_map_export_bridge import updates as _updates  # noqa: E402
+
+check("update operator registered", hasattr(bpy.ops.gmeb, "check_updates"))
+check("install runs off the operator stack",
+      callable(getattr(_updates, "install_latest", None)))
+
+import inspect  # noqa: E402
+
+_src = inspect.getsource(mod.operators.GMEB_OT_check_updates)
+check("the operator does not install inline",
+      "package_install" not in _src, "found a direct install call")
+check("the operator defers to a timer", "timers.register" in _src)
+
+try:
+    _res = bpy.ops.gmeb.check_updates()
+    check("update check runs without crashing", "FINISHED" in _res or
+          "CANCELLED" in _res, _res)
+except Exception as exc:                                # noqa: BLE001
+    check("update check runs without crashing", False, exc)
+
+
 # --- teardown ---------------------------------------------------------------
 connect.disconnect()
 check("agent stopped", not agent.is_running())

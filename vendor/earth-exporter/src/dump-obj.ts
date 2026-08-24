@@ -81,6 +81,13 @@ export class ObjWriter {
   // Tiles Google served with no imagery on them.
   public static tilesBlank = 0;
 
+  // Tiles that came back blank this time but were good on an earlier run, so
+  // the earlier picture was reused.
+  public static tilesRestored = 0;
+
+  // Where known-good textures are kept between runs.
+  public static textureCacheDir = '';
+
   // Guards against a node being written more than once. Two coincident
   // copies of a mesh z-fight, which looks like corruption rather than like
   // duplication, so it is worth refusing outright.
@@ -93,6 +100,31 @@ export class ObjWriter {
   // A tile this black carries no imagery; anything less may just be night,
   // deep shade, or dark tarmac, which are all legitimate.
   public static readonly BLACK_TILE_FRACTION = 0.95;
+
+  private static cachePath(texName: string, ext: string): string {
+    return path.join(ObjWriter.textureCacheDir, `${texName}.${ext}`);
+  }
+
+  public static readCachedTexture(texName: string, ext: string): Buffer | null {
+    if (!ObjWriter.textureCacheDir) return null;
+    try {
+      const file = ObjWriter.cachePath(texName, ext);
+      return fs.existsSync(file) ? fs.readFileSync(file) : null;
+    } catch (ex) {
+      console.error(`MRF_DIAG cache-read-failed ${texName}: ${String(ex).slice(0, 80)}`);
+      return null;
+    }
+  }
+
+  public static writeCachedTexture(texName: string, ext: string, buffer: Buffer): void {
+    if (!ObjWriter.textureCacheDir) return;
+    try {
+      fs.ensureDirSync(ObjWriter.textureCacheDir);
+      fs.writeFileSync(ObjWriter.cachePath(texName, ext), buffer);
+    } catch (ex) {
+      console.error(`MRF_DIAG cache-write-failed ${texName}: ${String(ex).slice(0, 80)}`);
+    }
+  }
 
   private initCtxOBJ(dir: string): ObjContext {
     fs.writeFileSync(path.join(dir, 'model.obj'), `mtllib model.mtl\n`);
@@ -116,7 +148,25 @@ export class ObjWriter {
       let decoded = null;
       try {
         const d = decodeTexture(mesh.texture);
-        const black = typeof d.blackFraction === 'number' ? d.blackFraction : 0;
+        let black = typeof d.blackFraction === 'number' ? d.blackFraction : 0;
+
+        const texName = `tex_${nodeName}_${meshIndex}`;
+        if (black >= ObjWriter.BLACK_TILE_FRACTION) {
+          // Blank this time. If this tile was good on an earlier run, keep the
+          // picture we already have rather than replacing it with nothing.
+          const kept = ObjWriter.readCachedTexture(texName, d.extension);
+          if (kept) {
+            d.buffer = kept;
+            d.blackFraction = 0;
+            black = 0;
+            ObjWriter.tilesRestored++;
+            console.error(`MRF_DIAG texture-restored ${texName}`);
+          }
+        } else {
+          // Good this time, so remember it for next time.
+          ObjWriter.writeCachedTexture(texName, d.extension, d.buffer);
+        }
+
         if (black < ObjWriter.BLACK_TILE_FRACTION) {
           usable++;
         }

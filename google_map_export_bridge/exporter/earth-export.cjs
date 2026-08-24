@@ -14294,9 +14294,40 @@ var ObjWriter = class _ObjWriter {
     this.tilesBlank = 0;
   }
   static {
+    // Tiles that came back blank this time but were good on an earlier run, so
+    // the earlier picture was reused.
+    this.tilesRestored = 0;
+  }
+  static {
+    // Where known-good textures are kept between runs.
+    this.textureCacheDir = "";
+  }
+  static {
     // A tile this black carries no imagery; anything less may just be night,
     // deep shade, or dark tarmac, which are all legitimate.
     this.BLACK_TILE_FRACTION = 0.95;
+  }
+  static cachePath(texName, ext) {
+    return import_path6.default.join(_ObjWriter.textureCacheDir, `${texName}.${ext}`);
+  }
+  static readCachedTexture(texName, ext) {
+    if (!_ObjWriter.textureCacheDir) return null;
+    try {
+      const file = _ObjWriter.cachePath(texName, ext);
+      return import_fs_extra.default.existsSync(file) ? import_fs_extra.default.readFileSync(file) : null;
+    } catch (ex) {
+      console.error(`MRF_DIAG cache-read-failed ${texName}: ${String(ex).slice(0, 80)}`);
+      return null;
+    }
+  }
+  static writeCachedTexture(texName, ext, buffer) {
+    if (!_ObjWriter.textureCacheDir) return;
+    try {
+      import_fs_extra.default.ensureDirSync(_ObjWriter.textureCacheDir);
+      import_fs_extra.default.writeFileSync(_ObjWriter.cachePath(texName, ext), buffer);
+    } catch (ex) {
+      console.error(`MRF_DIAG cache-write-failed ${texName}: ${String(ex).slice(0, 80)}`);
+    }
   }
   initCtxOBJ(dir) {
     import_fs_extra.default.writeFileSync(import_path6.default.join(dir, "model.obj"), `mtllib model.mtl
@@ -14317,7 +14348,20 @@ var ObjWriter = class _ObjWriter {
       let decoded = null;
       try {
         const d2 = (0, import_decode_texture.decodeTexture)(mesh.texture);
-        const black = typeof d2.blackFraction === "number" ? d2.blackFraction : 0;
+        let black = typeof d2.blackFraction === "number" ? d2.blackFraction : 0;
+        const texName = `tex_${nodeName}_${meshIndex}`;
+        if (black >= _ObjWriter.BLACK_TILE_FRACTION) {
+          const kept = _ObjWriter.readCachedTexture(texName, d2.extension);
+          if (kept) {
+            d2.buffer = kept;
+            d2.blackFraction = 0;
+            black = 0;
+            _ObjWriter.tilesRestored++;
+            console.error(`MRF_DIAG texture-restored ${texName}`);
+          }
+        } else {
+          _ObjWriter.writeCachedTexture(texName, d2.extension, d2.buffer);
+        }
         if (black < _ObjWriter.BLACK_TILE_FRACTION) {
           usable++;
         }
@@ -14714,6 +14758,10 @@ var argv = yargs_default(hideBin(process.argv)).option("bbox", {
   type: "number",
   default: 20,
   describe: "Maximum octant depth. Higher means finer geometry and a slower export"
+}).option("texture-cache", {
+  type: "string",
+  default: "",
+  describe: "Folder of known-good tile textures. Google sometimes serves a blank texture for a tile it served properly before, so a good one is kept here and reused rather than being replaced by the blank"
 }).option("center-scale", {
   type: "boolean",
   default: false,
@@ -14757,6 +14805,9 @@ async function bootstrap() {
   const maxLevel = Math.max(2, Math.min(21, Math.round(argv.level)));
   emit("start", { bbox: argv.bbox, level: maxLevel });
   const app = new DumpObjApp();
+  if (argv["texture-cache"]) {
+    ObjWriter.textureCacheDir = String(argv["texture-cache"]);
+  }
   const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel);
   const levels = Object.keys(data).map(Number).filter((n2) => Number.isFinite(n2)).sort((a2, b2) => b2 - a2);
   if (levels.length === 0) {
@@ -14785,10 +14836,11 @@ async function bootstrap() {
   if (argv["center-scale"]) {
     centerScaleObj(OBJ_DIR);
   }
-  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0) {
+  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0 || ObjWriter.tilesRestored > 0) {
     emit("textures", {
       failed: ObjWriter.texturesFailed,
-      blank: ObjWriter.tilesBlank
+      blank: ObjWriter.tilesBlank,
+      restored: ObjWriter.tilesRestored
     });
   }
   emit("done", { dir: modelOutDir });

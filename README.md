@@ -142,10 +142,13 @@ to be running — the add-on serves it itself.
 
 ### Updating from inside Blender
 
-In the add-on preferences, press **Enable Updates In Blender** once. That
-registers this repository's release feed with Blender, and from then on updates
-appear under **Preferences → Get Extensions** exactly like any other extension —
-Blender checks, downloads, installs and handles the restart.
+In the add-on preferences, press **Update Now**. It checks GitHub, and if
+there is a newer release it registers the feed if needed, refreshes it, and
+installs the update through Blender's own extension machinery. Restart Blender
+afterwards to finish.
+
+**Enable Updates In Blender** does only the registration, so updates also show
+up under **Preferences → Get Extensions** alongside everything else.
 
 There is deliberately no bespoke updater here. An add-on overwriting itself
 while running is a poor idea, and Blender 4.2 and newer already does this
@@ -394,9 +397,14 @@ Two things happen now:
   as "no imagery here"; black reads as a hole.
 
 Measured on one area: 52 black textures became **none**, with 6 nodes handed
-back to their parents and 8 meshes falling back to grey. The count is reported
-with the export, and re-running will not change it - the imagery is not there to
-fetch.
+back to their parents and 8 meshes falling back to grey.
+
+**A re-run never trades a good texture for a blank one.** Whether a tile comes
+back with imagery is not always the same from one request to the next, so every
+good texture is kept in a cache beside the download folder, keyed by tile. When
+a tile arrives blank and a good picture for it already exists, the good one is
+used; when a previously blank tile finally arrives with imagery, the cache is
+updated. Both directions are reported with the export.
 
 ### Untextured patches, and re-running
 

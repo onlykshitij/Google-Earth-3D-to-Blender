@@ -17,6 +17,14 @@ const argv = yargs(hideBin(process.argv))
     default: 20,
     describe: 'Maximum octant depth. Higher means finer geometry and a slower export',
   })
+  .option('texture-cache', {
+    type: 'string',
+    default: '',
+    describe:
+      'Folder of known-good tile textures. Google sometimes serves a blank ' +
+      'texture for a tile it served properly before, so a good one is kept ' +
+      'here and reused rather than being replaced by the blank',
+  })
   .option('center-scale', {
     type: 'boolean',
     default: false,
@@ -80,6 +88,10 @@ async function bootstrap() {
 
   const app = new DumpObjApp();
 
+  if (argv['texture-cache']) {
+    ObjWriter.textureCacheDir = String(argv['texture-cache']);
+  }
+
   const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel);
 
   // Take the deepest level found plus its parent, matching the original
@@ -133,10 +145,12 @@ async function bootstrap() {
 
   // Tell the caller if any tile arrived in a format we cannot decode, so a
   // model with untextured patches explains itself instead of looking broken.
-  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0) {
+  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0 ||
+      ObjWriter.tilesRestored > 0) {
     emit('textures', {
       failed: ObjWriter.texturesFailed,
       blank: ObjWriter.tilesBlank,
+      restored: ObjWriter.tilesRestored,
     });
   }
 

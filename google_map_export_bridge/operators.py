@@ -155,14 +155,13 @@ class GMEB_OT_setup_updates(Operator):
 
 class GMEB_OT_check_updates(Operator):
     bl_idname = "gmeb.check_updates"
-    bl_label = "Check For Updates"
-    bl_description = "Ask GitHub whether a newer release exists"
+    bl_label = "Update Now"
+    bl_description = ("Check for a newer release and install it, using "
+                      "Blender's own extension machinery")
 
     def execute(self, context):
         from . import hub, updates as up
 
-        # hub.VERSION is the version the interface reports, and build.py
-        # refuses to package when it disagrees with bl_info.
         current = hub.VERSION
         latest = up.latest_release()
 
@@ -171,21 +170,25 @@ class GMEB_OT_check_updates(Operator):
                         "Could not reach GitHub to check for updates.")
             return {"CANCELLED"}
 
-        if up.is_newer(latest, current):
-            self.report({"INFO"}, "Version %s is available; you have %s."
-                        % (latest, current))
-            # If the feed is registered, Blender can install it directly.
-            if up.find_repo(context) is not None:
-                try:
-                    bpy.ops.extensions.repo_sync_all()
-                    bpy.ops.extensions.userpref_show_for_update()
-                except Exception:                       # noqa: BLE001
-                    webbrowser.open(up.RELEASES_URL)
-            else:
-                webbrowser.open(up.RELEASES_URL)
-        else:
-            self.report({"INFO"}, "You are on the latest version (%s)." % current)
+        if not up.is_newer(latest, current):
+            up.STATUS.update({"state": "current",
+                              "message": "Up to date (%s)." % current})
+            self.report({"INFO"}, "Already on the latest version (%s)." % current)
+            return {"FINISHED"}
+
+        # The install itself is handed to a timer. Blender reloads its
+        # extension state while installing, and doing that with this operator
+        # still on the stack crashes it, so the operator gets out of the way
+        # first.
+        up.STATUS.update({"state": "working",
+                          "message": "Installing %s..." % latest})
+        bpy.app.timers.register(up.install_latest, first_interval=0.1)
+
+        self.report({"INFO"},
+                    "Installing %s. Watch the panel, then restart Blender."
+                    % latest)
         return {"FINISHED"}
+
 
 
 class GMEB_OT_open_output(Operator):

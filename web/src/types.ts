@@ -44,6 +44,8 @@ export type ModelReport = {
   texturesMissing: number;
   /** Tiles Google served blank: real geometry, no imagery. */
   texturesBlank: number;
+  /** Tiles kept from an earlier run because this one came back blank. */
+  texturesRestored: number;
 };
 
 export type Job = {

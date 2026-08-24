@@ -157,6 +157,10 @@ def build_params(context, bbox, options=None):
             else 0.0
         ),
         "keep_downloads": keep_downloads,
+        # Kept beside the download cache rather than in the export folder, so a
+        # good texture is still known about when the next export goes somewhere
+        # else entirely.
+        "texture_cache": os.path.join(p.resolved_work_dir(), "texture-cache"),
         # The exporter always writes to <cwd>/downloaded_files/obj/<timestamp>/.
         # Lifting those files up into the job folder is what makes the chosen
         # destination hold the model rather than a tree of scaffolding.

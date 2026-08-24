@@ -74,6 +74,21 @@ def _reconnect(self, _context):
     bpy.app.timers.register(apply, first_interval=0.2)
 
 
+def _wrap_pref(text, width):
+    words = (text or "").split()
+    lines, current = [], ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        if len(candidate) > width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines[:4] or [""]
+
+
 class GMEB_Preferences(AddonPreferences):
     # Set at registration time to the actual package name, which differs between
     # a legacy add-on install and an extension install (bl_ext.*).
@@ -189,9 +204,21 @@ class GMEB_Preferences(AddonPreferences):
                       icon="CHECKMARK")
 
         row = box.row(align=True)
+        row.scale_y = 1.2
+        row.operator("gmeb.check_updates", icon="IMPORT")
         if repo is None:
-            row.operator("gmeb.setup_updates", icon="PLUGIN")
-        row.operator("gmeb.check_updates", icon="FILE_REFRESH")
+            row.operator("gmeb.setup_updates", text="", icon="PLUGIN")
+
+        status = updates.STATUS
+        if status.get("message"):
+            icons = {"working": "SORTTIME", "done": "CHECKMARK",
+                     "error": "ERROR", "current": "CHECKMARK"}
+            col = box.column(align=True)
+            col.scale_y = 0.85
+            for i, line in enumerate(_wrap_pref(status["message"], 46)):
+                col.label(text=line,
+                          icon=icons.get(status.get("state"), "INFO")
+                          if i == 0 else "BLANK1")
 
         box = layout.box()
         box.label(text="Tools", icon="TOOL_SETTINGS")
