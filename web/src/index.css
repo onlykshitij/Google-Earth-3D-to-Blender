@@ -1,0 +1,134 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-ink-950: #0a0c10;
+  --color-ink-900: #10131a;
+  --color-ink-850: #161a23;
+  --color-ink-800: #1c212c;
+  --color-ink-700: #262d3b;
+  --color-ink-600: #364052;
+  --color-ink-400: #6b7789;
+  --color-ink-300: #9aa5b6;
+  --color-ink-200: #c7cfdb;
+
+  --color-accent: #5b9cff;
+  --color-accent-bright: #7db1ff;
+  --color-good: #4ecb8f;
+  --color-warn: #f0b429;
+  --color-bad: #ff6b6b;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--color-ink-950);
+    color: var(--color-ink-200);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* Tabular figures keep coordinate readouts from jittering as they update. */
+  input[type="number"],
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 0.25;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-700);
+    border-radius: 999px;
+    border: 2px solid var(--color-ink-900);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-600);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-white/8 bg-ink-900/85 shadow-2xl shadow-black/40 backdrop-blur-xl;
+  }
+
+  .field-label {
+    @apply text-[11px] font-medium uppercase tracking-wider text-ink-400;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-white/10 bg-ink-950/70 px-2.5 py-1.5
+           text-sm text-ink-200 outline-none transition
+           placeholder:text-ink-400
+           focus:border-accent/70 focus:ring-2 focus:ring-accent/20;
+  }
+
+  /* Tailwind 4's @apply only accepts real utilities, not other custom classes,
+     so the shared button base is spelled out in each variant. */
+  .btn,
+  .btn-ghost,
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2
+           text-sm font-medium transition disabled:cursor-not-allowed
+           disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply border border-white/10 bg-white/[0.03] text-ink-200
+           hover:border-white/20 hover:bg-white/[0.07];
+  }
+
+  .btn-primary {
+    @apply bg-accent text-ink-950 shadow-lg shadow-accent/25
+           hover:bg-accent-bright;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10
+           bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-ink-300;
+  }
+}
+
+/* --- Leaflet, themed to match ------------------------------------------- */
+.leaflet-container {
+  background: var(--color-ink-950);
+  font-family: inherit;
+}
+
+.leaflet-control-attribution {
+  background: rgb(10 12 16 / 0.75) !important;
+  color: var(--color-ink-400) !important;
+  backdrop-filter: blur(8px);
+  border-top-left-radius: 6px;
+  font-size: 10px !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-ink-300) !important;
+}
+
+/* The zoom control is replaced by buttons in the overlay UI. */
+.leaflet-control-zoom {
+  display: none;
+}
+
+.map-drawing {
+  cursor: crosshair !important;
+}

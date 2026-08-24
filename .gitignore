@@ -1,0 +1,23 @@
+# reference clones and build inputs
+_reference/
+vendor/earth-exporter/node_modules/
+vendor/earth-exporter/dist/
+vendor/earth-exporter/downloaded_files/
+
+# web build
+web/node_modules/
+web/dist/
+
+# the built interface is generated into the add-on
+google_map_export_bridge/web/
+
+# packaged add-on
+dist/
+
+# python
+__pycache__/
+*.pyc
+
+# scratch
+proof/
+*.blend1

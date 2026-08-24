@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # These two need neither Blender nor a network: the georeferencing maths
+      # and the hub protocol are both exercised in-process.
+      - name: Georeferencing and coverage checks
+        run: python tests/test_ground_fit.py
+
+      - name: Hub routing and guards
+        run: python tests/test_hub.py
+
+      - name: Install interface dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Location parser checks
+        working-directory: web
+        run: |
+          mkdir -p ../dist
+          npx esbuild src/lib/geo.check.ts --bundle --platform=node \
+            --format=cjs --outfile=../dist/geo.check.cjs
+          node ../dist/geo.check.cjs
+
+      - name: Build the interface
+        working-directory: web
+        run: npm run build
+
+      - name: Package the add-on
+        run: python build.py --no-web
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addon-zip
+          path: dist/*.zip
+          if-no-files-found: error

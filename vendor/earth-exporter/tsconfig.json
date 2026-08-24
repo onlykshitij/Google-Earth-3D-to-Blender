@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "commonjs",
+    "rootDir": ".",
+    "allowJs": true,
+    "checkJs": false,
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@types": ["./types/*"]
+    },
+  },
+  "include": ["src/**/*", "types/**/*, src/utils/**/*"],
+  "exclude": ["node_modules", "build", "downloaded_files/**/*"]
+}

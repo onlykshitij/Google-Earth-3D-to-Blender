@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/types.ts","./src/components/instancepicker.tsx","./src/components/mapcanvas.tsx","./src/components/progresscard.tsx","./src/components/searchbox.tsx","./src/components/sidebar.tsx","./src/components/ui.tsx","./src/lib/geo.ts","./vite.config.ts"],"version":"5.8.3"}

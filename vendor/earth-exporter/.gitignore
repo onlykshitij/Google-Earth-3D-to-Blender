@@ -1,0 +1,5 @@
+.vscode
+node_modules
+downloaded_files/*
+build
+dist

@@ -1,0 +1,13 @@
+**/node_modules
+_reference/
+vendor/
+tests/
+proof/
+*.zip
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+dist/
+build/
+google_map_export_bridge/web/

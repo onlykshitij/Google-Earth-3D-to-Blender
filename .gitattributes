@@ -1,0 +1,8 @@
+# Normalise to LF in the repository so CI on Linux and editors on Windows agree.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.bmp binary
+*.jpg binary
+*.zip binary

@@ -1,0 +1,26 @@
+# Extension manifest for Blender 4.2 and newer. The bl_info block in
+# __init__.py keeps the legacy add-on install path working as well.
+schema_version = "1.0.0"
+
+id = "google_map_export_bridge"
+version = "1.0.0"
+name = "Google Map Export Bridge"
+tagline = "Import Google Earth 3D areas as levelled modelling references"
+maintainer = "Sentics"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:MIT"]
+
+[permissions]
+network = "Download map tiles, and serve the local map interface"
+files = "Write downloaded tiles and converted models to a cache folder"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "*.pyc",
+  ".DS_Store",
+]

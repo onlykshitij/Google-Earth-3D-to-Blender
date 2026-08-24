@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, for example v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # A broken build should never become a release.
+      - name: Run the checks
+        run: |
+          python tests/test_ground_fit.py
+          python tests/test_hub.py
+
+      - name: Build the add-on
+        run: |
+          cd web && npm ci && cd ..
+          python build.py
+
+      - name: Name the artifact after the tag
+        id: name
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          ZIP=$(ls dist/*.zip | head -1)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "Releasing $ZIP as $TAG"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.name.outputs.tag }}
+          name: Google Map Export Bridge ${{ steps.name.outputs.tag }}
+          files: ${{ steps.name.outputs.zip }}
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            1. Download the `.zip` below.
+            2. In Blender: **Edit → Preferences → Add-ons**, then the **⌄**
+               menu in the top right → **Install from Disk…**, and choose it.
+            3. Enable **Google Map Export Bridge**.
+            4. Allow network access: **Preferences → System → Network →
+               Allow Online Access**.
+            5. Press **N** in the 3D viewport and open the **Map Export** tab.
+
+            Requires Blender 4.2 or newer and [Node.js](https://nodejs.org) 18+.
+
+            The container image for this version is at
+            `ghcr.io/${{ github.repository }}:${{ steps.name.outputs.tag }}`.
