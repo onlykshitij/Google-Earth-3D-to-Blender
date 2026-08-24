@@ -77,12 +77,23 @@ export class ObjWriter {
 
   public static texturesFailed = 0;
 
+  // Guards against a node being written more than once. Two coincident
+  // copies of a mesh z-fight, which looks like corruption rather than like
+  // duplication, so it is worth refusing outright.
+  private readonly written = new Set<string>();
+
   private initCtxOBJ(dir: string): ObjContext {
     fs.writeFileSync(path.join(dir, 'model.obj'), `mtllib model.mtl\n`);
     return { objDir: dir, c_v: 0, c_n: 0, c_u: 0 };
   }
 
   public writeNode(node: Node, nodeName: string, exclude: number[]): void {
+    if (this.written.has(nodeName)) {
+      console.error(`MRF_DIAG duplicate-node ${nodeName} skipped`);
+      return;
+    }
+    this.written.add(nodeName);
+
     for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
       const meshName = `${nodeName}_${meshIndex}`;
       const tex = mesh.texture;

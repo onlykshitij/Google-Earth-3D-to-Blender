@@ -54,11 +54,21 @@ export function startExport(
 }
 
 /**
- * List folders on the machine running the chosen Blender.
+ * Ask that Blender to open its own folder dialog.
  *
- * The browser cannot see that filesystem - it may not even be the same machine
- * - so the hub relays the question to the agent and waits for its answer.
+ * A browser cannot open a native dialog for a filesystem it is not on, so the
+ * dialog is opened where the folder actually lives. It returns as soon as the
+ * request is queued; the chosen path arrives later, in the instance's reported
+ * defaults.
  */
+export function pickFolder(token: string, instanceId: string) {
+  return request<{ opened: boolean }>("api/pick-folder", {
+    method: "POST",
+    body: JSON.stringify({ token, instanceId }),
+  });
+}
+
+/** List folders on the Blender machine. Kept for hubs driving a remote Blender. */
 export function browse(token: string, instanceId: string, path: string) {
   return request<Listing>("api/browse", {
     method: "POST",

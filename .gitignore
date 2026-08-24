@@ -7,6 +7,8 @@ vendor/earth-exporter/downloaded_files/
 # web build
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
+web/**/*.tsbuildinfo
 
 # the built interface is generated into the add-on
 google_map_export_bridge/web/

@@ -14262,6 +14262,10 @@ var Semaphore = class {
 };
 var ObjWriter = class _ObjWriter {
   constructor(dir) {
+    // Guards against a node being written more than once. Two coincident
+    // copies of a mesh z-fight, which looks like corruption rather than like
+    // duplication, so it is worth refusing outright.
+    this.written = /* @__PURE__ */ new Set();
     this.ctx = this.initCtxOBJ(dir);
   }
   static {
@@ -14273,6 +14277,11 @@ var ObjWriter = class _ObjWriter {
     return { objDir: dir, c_v: 0, c_n: 0, c_u: 0 };
   }
   writeNode(node, nodeName, exclude) {
+    if (this.written.has(nodeName)) {
+      console.error(`MRF_DIAG duplicate-node ${nodeName} skipped`);
+      return;
+    }
+    this.written.add(nodeName);
     for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
       const meshName = `${nodeName}_${meshIndex}`;
       const tex = mesh.texture;
@@ -14704,11 +14713,20 @@ async function bootstrap() {
       "No octants found for that area. Google Earth may not have 3D coverage there."
     );
   }
-  const octants = [];
+  const collected = /* @__PURE__ */ new Set();
   for (const level of levels.slice(0, 2)) {
-    octants.push(...data[level].octants);
+    for (const oct of data[level].octants) {
+      collected.add(oct);
+    }
   }
-  emit("octants", { count: octants.length, levels: levels.slice(0, 2) });
+  const octants = [...collected].filter(
+    (oct) => ![...collected].some((other) => other !== oct && oct.startsWith(other))
+  );
+  emit("octants", {
+    count: octants.length,
+    levels: levels.slice(0, 2),
+    dropped: collected.size - octants.length
+  });
   const modelOutDir = await app.run(octants, maxLevel);
   if (!modelOutDir) {
     throw new Error("Model out dir is undefined");

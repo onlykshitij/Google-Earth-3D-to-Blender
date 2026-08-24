@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FolderPicker } from "./FolderPicker";
+import { useEffect, useState } from "react";
+import * as api from "../api";
 import type { Bbox, ExportOptions, Instance, Job } from "../types";
 import { instanceLabel } from "../types";
 import {
@@ -38,7 +38,30 @@ export function Sidebar(props: Props) {
   const hasArea = bbox !== null && !isEmpty(bbox);
   const size = hasArea ? bboxSize(bbox!) : null;
   const [showFields, setShowFields] = useState(false);
-  const [picking, setPicking] = useState(false);
+  // While a dialog is open in Blender there is nothing to show here but a
+  // prompt to go and look at it.
+  const [awaitingDialog, setAwaitingDialog] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+
+  const reportedDir = instance?.info?.defaults?.exportDir ?? "";
+  useEffect(() => {
+    // The path chosen in Blender comes back through the reported defaults.
+    if (awaitingDialog && reportedDir && reportedDir !== options.exportDir) {
+      setOptions({ exportDir: reportedDir });
+      setAwaitingDialog(false);
+    }
+  }, [awaitingDialog, reportedDir, options.exportDir, setOptions]);
+
+  const openBlenderDialog = async () => {
+    if (!instance) return;
+    setDialogError(null);
+    try {
+      await api.pickFolder(props.token, instance.id);
+      setAwaitingDialog(true);
+    } catch (err) {
+      setDialogError((err as Error).message);
+    }
+  };
 
   const info = instance?.info ?? {};
   const blocked = props.busy || !hasArea || !instance;
@@ -231,12 +254,12 @@ export function Sidebar(props: Props) {
             spellCheck={false}
           />
           <button
-            onClick={() => setPicking(true)}
+            onClick={openBlenderDialog}
             disabled={!instance}
             className="btn-ghost shrink-0"
             title={
               instance
-                ? "Browse folders on the machine running that Blender"
+                ? "Open a folder dialog in Blender"
                 : "Connect a Blender first"
             }
           >
@@ -244,17 +267,17 @@ export function Sidebar(props: Props) {
           </button>
         </div>
 
-        {picking && instance && (
-          <FolderPicker
-            token={props.token}
-            instanceId={instance.id}
-            startPath={options.exportDir}
-            onPick={(path) => {
-              setOptions({ exportDir: path });
-              setPicking(false);
-            }}
-            onClose={() => setPicking(false)}
-          />
+        {awaitingDialog && (
+          <p className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-[11px] leading-snug text-accent-bright">
+            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+            A folder dialog is open in Blender — switch to it and choose one.
+          </p>
+        )}
+
+        {dialogError && (
+          <p className="mt-1.5 text-[11px] leading-snug text-[#ffb3b3]">
+            {dialogError}
+          </p>
         )}
         <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
           {options.exportDir.trim() ? (

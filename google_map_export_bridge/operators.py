@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import webbrowser
 
+import bpy
+
+from bpy.props import BoolProperty, StringProperty
 from bpy.types import Operator
 
 from . import agent, connect, jobs, launch
@@ -121,6 +124,31 @@ class GMEB_OT_cancel(Operator):
         return {"FINISHED"}
 
 
+class GMEB_OT_pick_export_dir(Operator):
+    bl_idname = "gmeb.pick_export_dir"
+    bl_label = "Choose Export Folder"
+    bl_description = "Pick the folder exports are downloaded into and imported from"
+
+    # `directory` is what Blender fills in when the browser is opened in folder
+    # mode; `filter_folder` keeps files out of the listing.
+    directory: StringProperty(subtype="DIR_PATH", options={"HIDDEN"})
+    filter_folder: BoolProperty(default=True, options={"HIDDEN"})
+
+    def invoke(self, context, _event):
+        settings = getattr(context.scene, "gmeb", None)
+        if settings is not None and settings.export_dir:
+            self.directory = bpy.path.abspath(settings.export_dir)
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        if not self.directory:
+            return {"CANCELLED"}
+        context.scene.gmeb.export_dir = self.directory
+        self.report({"INFO"}, "Exports will go to %s" % self.directory)
+        return {"FINISHED"}
+
+
 class GMEB_OT_open_output(Operator):
     bl_idname = "gmeb.open_output"
     bl_label = "Open Folder"
@@ -187,6 +215,7 @@ CLASSES = (
     GMEB_OT_copy_url,
     GMEB_OT_export,
     GMEB_OT_cancel,
+    GMEB_OT_pick_export_dir,
     GMEB_OT_open_output,
     GMEB_OT_reimport,
 )

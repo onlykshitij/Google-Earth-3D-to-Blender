@@ -97,12 +97,30 @@ async function bootstrap() {
     );
   }
 
-  const octants: string[] = [];
+  // The deepest two levels are collected, but a shallower octant's traversal
+  // already recurses down through its own descendants. Searching both lists
+  // therefore visited - and wrote - every deep node twice, putting two exactly
+  // coincident copies of each mesh in the model. They z-fight, which reads as
+  // solid dark blocks rather than as duplicated geometry.
+  //
+  // So any octant that has an ancestor in the set is dropped: searching the
+  // ancestor covers it, and covers it once.
+  const collected = new Set<string>();
   for (const level of levels.slice(0, 2)) {
-    octants.push(...data[level].octants);
+    for (const oct of data[level].octants) {
+      collected.add(oct);
+    }
   }
 
-  emit('octants', { count: octants.length, levels: levels.slice(0, 2) });
+  const octants = [...collected].filter(
+    (oct) => ![...collected].some((other) => other !== oct && oct.startsWith(other)),
+  );
+
+  emit('octants', {
+    count: octants.length,
+    levels: levels.slice(0, 2),
+    dropped: collected.size - octants.length,
+  });
 
   const modelOutDir = await app.run(octants, maxLevel);
   if (!modelOutDir) {

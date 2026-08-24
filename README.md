@@ -337,6 +337,30 @@ You get either *No 3D coverage* ("draped imagery over flat terrain, with no
 buildings") or *Thin coverage* with the numbers behind it. Both appear in the
 page and in Blender's panel, so you know before you start modelling.
 
+### Duplicated geometry
+
+Fixed in 1.1.1, and worth knowing about if you have models from before it.
+
+The exporter collects the deepest two octant levels and searched both lists.
+But a shallower octant's traversal already recurses down through its own
+descendants, so every deep node was visited — and written — **twice**. The model
+then held two exactly coincident copies of each mesh.
+
+Coincident surfaces z-fight: the renderer cannot decide which is in front and
+resolves it inconsistently across the frame, which shows up as sharp-edged dark
+blocks. It looks like missing textures, and it is not — the textures are fine
+and both copies have them.
+
+Octants that have an ancestor in the set are now dropped, since searching the
+ancestor covers them once. `ObjWriter` also refuses to write a node path twice,
+as a second line of defence. Measured on one area: 23 object blocks with 16
+distinct names became 16 and 16, with the same set of names — nothing lost but
+the duplicates.
+
+**If you already have such an import**, re-export it. Deleting the collection
+and running the export again on 1.1.1 is quicker than trying to deduplicate in
+place.
+
 ### Untextured patches, and re-running
 
 A tile can arrive without its image — a format the decoder does not know, a
@@ -370,11 +394,11 @@ By default downloads land in a temporary cache. Set an **Export folder** — in
 the page's Files card, or with the folder picker in Blender's **Files** panel —
 and each export gets its own dated subfolder there.
 
-**Browse…** in the Files card opens a folder picker for the machine running the
-chosen Blender. A browser cannot open a native dialog for a filesystem it is not
-on, and with a container or a remote hub that filesystem may belong to another
-machine entirely, so the listing is fetched from the Blender side and navigated
-in the page. You can also just type or paste a path.
+**Browse…** in the Files card opens Blender's own folder dialog, on the machine
+running that Blender. A browser cannot open a native dialog for a filesystem it
+is not on, so the dialog is opened where the folder actually lives — switch to
+Blender, choose a folder, and the page picks up the choice on its own. You can
+also just type or paste a path.
 
 ```
 <your folder>/43.72311_10.39412_20260824-142827/
