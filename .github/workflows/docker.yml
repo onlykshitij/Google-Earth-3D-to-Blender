@@ -58,7 +58,11 @@ jobs:
 
       - name: Check the published image answers
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$(git rev-parse --short HEAD)"
+          # Take a tag the action actually pushed. Building the reference by
+          # hand breaks whenever the repository name contains capitals, which
+          # a registry reference may not.
+          IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "checking $IMAGE"
           docker run -d --name check -p 8777:8777 "$IMAGE"
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8777/api/hub | grep -q google-map-export-bridge; then
