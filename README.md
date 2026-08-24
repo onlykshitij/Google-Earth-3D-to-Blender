@@ -286,6 +286,39 @@ To build from this checkout instead of pulling, uncomment `build: .` in
 
 </details>
 
+### Blender and the container both want port 8777
+
+If a Blender with the add-on enabled is already running, **it is hosting the
+interface itself** on `127.0.0.1:8777`, and `docker compose up` will fail with
+*"port is already allocated"*.
+
+That is worth knowing before reaching for Docker at all: the running Blender is
+already serving the same interface at <http://127.0.0.1:8777>. The container is
+only better if you want it to outlive Blender.
+
+Order decides whether this happens. **Start the container first** and there is no
+conflict at all — a Blender starting afterwards probes the port, finds the hub
+already there, and joins it as a client. The clash only occurs the other way
+round.
+
+To move an already-running Blender onto the container:
+
+1. Set **Hub URL** to `http://127.0.0.1:8777` in the add-on preferences. The
+   add-on stops hosting, releases the port, and from then on only ever joins.
+2. `docker compose up -d`
+
+Or, to leave Blender hosting and put the container somewhere else:
+
+```bash
+GMEB_HOST_PORT=8778 docker compose up -d
+```
+
+Then set **Hub URL** to `http://127.0.0.1:8778`. `GMEB_PUBLIC_URL` follows the
+port automatically.
+
+For a one-off, the **X** button in Blender's Map Export panel disconnects and
+frees the port immediately.
+
 ### Pointing Blender at any hub
 
 **Hub URL** in the add-on preferences takes a full address, not just a port, so
@@ -462,6 +495,10 @@ Allow Online Access**.
 **"No Blender is connected."** The hub is up but nothing has registered. Check
 the add-on is enabled and that **Hub URL** matches where the hub actually
 listens.
+
+**"Port is already allocated" from Docker.** A running Blender is hosting the
+interface on that port. See
+[Blender and the container both want port 8777](#blender-and-the-container-both-want-port-8777).
 
 **The export produced no geometry.** Google Earth has no 3D coverage there. Try a
 city centre, or a lower octant level.

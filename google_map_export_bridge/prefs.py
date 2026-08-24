@@ -43,6 +43,37 @@ def find_node() -> str:
     return ""
 
 
+def _reconnect(self, _context):
+    """
+    Re-join or re-host after the address settings change.
+
+    Without this, editing Hub URL leaves the old connection in place - and if
+    this Blender was hosting, it keeps holding the port, which is exactly what
+    blocks a container from taking it. Deferred to a timer so the preferences
+    panel is not blocked while the network work happens.
+    """
+    from . import agent
+
+    if not agent.is_running():
+        return
+
+    def apply():
+        from . import launch
+        try:
+            url, hosting, error = launch.connect_hub(bpy.context)
+        except Exception as exc:                        # noqa: BLE001
+            print("[google-map-export-bridge] reconnect failed: %s" % exc)
+            return None
+        if error:
+            print("[google-map-export-bridge] %s" % error)
+        else:
+            print("[google-map-export-bridge] now %s at %s"
+                  % ("hosting" if hosting else "joined", url))
+        return None
+
+    bpy.app.timers.register(apply, first_interval=0.2)
+
+
 class GMEB_Preferences(AddonPreferences):
     # Set at registration time to the actual package name, which differs between
     # a legacy add-on install and an extension install (bl_ext.*).
@@ -69,6 +100,7 @@ class GMEB_Preferences(AddonPreferences):
         default=DEFAULT_PORT,
         min=1024,
         max=65535,
+        update=_reconnect,
     )
     hub_url: StringProperty(
         name="Hub URL",
@@ -79,6 +111,7 @@ class GMEB_Preferences(AddonPreferences):
                     "and port are filled in when left off. Empty means host "
                     "the interface inside Blender",
         default="",
+        update=_reconnect,
     )
     agent_token: StringProperty(
         name="Hub Token",
@@ -86,6 +119,7 @@ class GMEB_Preferences(AddonPreferences):
                     "one (GMEB_AGENT_TOKEN)",
         default="",
         subtype="PASSWORD",
+        update=_reconnect,
     )
     autostart: BoolProperty(
         name="Connect Automatically",
