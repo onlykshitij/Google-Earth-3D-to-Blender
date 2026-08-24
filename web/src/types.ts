@@ -38,6 +38,10 @@ export type ModelReport = {
   density: number;
   relief: number;
   achievedLevel: number | null;
+  /** Tiles the exporter could not decode. */
+  texturesFailed: number;
+  /** Materials that reached the scene without a usable image. */
+  texturesMissing: number;
 };
 
 export type Job = {

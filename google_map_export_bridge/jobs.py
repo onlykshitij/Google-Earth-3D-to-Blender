@@ -71,6 +71,10 @@ class Job:
         self.model_path = None
         self.output_dir = None
         self.achieved_level = None
+        # Tiles the exporter could not decode, and materials that reached the
+        # scene without a usable image. They usually agree, but not always.
+        self.textures_failed = 0
+        self.textures_missing = 0
         self.report = None      # obj_transform.ObjTransformResult
         self.import_summary = None
         self.cancelled = False
@@ -110,6 +114,8 @@ class Job:
                 "density": round(r.vertex_density, 3),
                 "relief": round(r.relief_m, 1),
                 "achievedLevel": self.achieved_level,
+                "texturesFailed": self.textures_failed,
+                "texturesMissing": self.textures_missing,
             }
         return d
 
@@ -194,6 +200,11 @@ class JobManager:
             self._job = job
         self._fail(job, RuntimeError(message))
         return job
+
+    def last_params(self):
+        """The parameters of the most recent job, for re-running it."""
+        with self._lock:
+            return dict(self._job.params) if self._job is not None else None
 
     def cancel(self):
         with self._lock:
@@ -348,6 +359,14 @@ class JobManager:
                         out_dir = data.get("dir")
                     elif event == "error":
                         remote_error = data.get("message") or "Exporter failed"
+                    elif event == "textures":
+                        failed = int(data.get("failed", 0) or 0)
+                        if failed:
+                            job.textures_failed = failed
+                            self._set(message="%d tile%s had no usable texture"
+                                              % (failed,
+                                                 "" if failed == 1 else "s"))
+
                     elif event == "octants":
                         # The deepest level Google actually has here. Less than
                         # asked for is the first hint of thin coverage.

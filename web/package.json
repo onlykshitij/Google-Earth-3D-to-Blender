@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "screenshots": "node tools/screenshots.mjs"
+    "screenshots": "node tools/screenshots.mjs",
+    "icons": "node tools/render-icon.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

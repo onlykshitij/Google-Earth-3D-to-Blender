@@ -2,7 +2,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { Bbox } from './types/types';
 import { CoordinatesToOctants } from './coordinates-to-octants';
-import { DumpObjApp } from './dump-obj';
+import { DumpObjApp, ObjWriter } from './dump-obj';
 import { centerScaleObj } from './center-scale-obj';
 import { OBJ_DIR } from './constants/constants';
 
@@ -111,6 +111,12 @@ async function bootstrap() {
 
   if (argv['center-scale']) {
     centerScaleObj(OBJ_DIR);
+  }
+
+  // Tell the caller if any tile arrived in a format we cannot decode, so a
+  // model with untextured patches explains itself instead of looking broken.
+  if (ObjWriter.texturesFailed > 0) {
+    emit('textures', { failed: ObjWriter.texturesFailed });
   }
 
   emit('done', { dir: modelOutDir });

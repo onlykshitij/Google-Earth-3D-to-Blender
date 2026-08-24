@@ -197,9 +197,56 @@ def import_model(context, model_path, options):
 
     bpy.ops.object.select_all(action="DESELECT")
 
+    missing = count_missing_textures(new_objects)
+
     parts = ["Imported %d object%s into '%s'"
              % (len(new_objects), "" if len(new_objects) == 1 else "s", coll.name)]
     if replaced:
         parts.append("replaced %d earlier import%s"
                      % (replaced, "" if replaced == 1 else "s"))
+    if missing:
+        parts.append("%d material%s has no texture"
+                     % (missing, "" if missing == 1 else "s"))
+
+    import_model.last_missing_textures = missing
     return "; ".join(parts)
+
+
+def count_missing_textures(objects):
+    """
+    How many materials ended up without a usable image.
+
+    Checked after import rather than trusting the exporter, because a texture
+    can go missing for reasons the exporter never sees: a file that failed to
+    write, a path the filesystem rejected, or a cache cleared underneath the
+    model. Whatever the cause, the result is the same untextured patch, so it is
+    worth counting here where it actually shows.
+    """
+    missing = 0
+    seen = set()
+
+    for obj in objects:
+        for slot in getattr(obj, "material_slots", []):
+            material = slot.material
+            if material is None or material.name in seen:
+                continue
+            seen.add(material.name)
+
+            if not material.use_nodes:
+                continue
+
+            image_nodes = [n for n in material.node_tree.nodes
+                           if n.type == "TEX_IMAGE"]
+            if not image_nodes:
+                # The exporter writes a plain grey material when it could not
+                # decode a tile, so this is the deliberate no-texture case.
+                missing += 1
+                continue
+
+            for node in image_nodes:
+                image = node.image
+                if image is None or image.size[0] == 0 or image.size[1] == 0:
+                    missing += 1
+                    break
+
+    return missing

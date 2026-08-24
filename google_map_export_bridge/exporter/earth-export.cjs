@@ -14260,9 +14260,12 @@ var Semaphore = class {
     }
   }
 };
-var ObjWriter = class {
+var ObjWriter = class _ObjWriter {
   constructor(dir) {
     this.ctx = this.initCtxOBJ(dir);
+  }
+  static {
+    this.texturesFailed = 0;
   }
   initCtxOBJ(dir) {
     import_fs_extra.default.writeFileSync(import_path6.default.join(dir, "model.obj"), `mtllib model.mtl
@@ -14274,20 +14277,39 @@ var ObjWriter = class {
       const meshName = `${nodeName}_${meshIndex}`;
       const tex = mesh.texture;
       const texName = `tex_${nodeName}_${meshIndex}`;
+      let decoded = null;
+      try {
+        decoded = (0, import_decode_texture.decodeTexture)(tex);
+      } catch (ex) {
+        _ObjWriter.texturesFailed++;
+        console.error(
+          `MRF_DIAG texture-failed ${texName} format=${tex?.textureFormat}: ${String(ex).slice(0, 120)}`
+        );
+      }
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
       import_fs_extra.default.appendFileSync(import_path6.default.join(this.ctx.objDir, "model.obj"), obj);
-      const { buffer: buf, extension: ext } = (0, import_decode_texture.decodeTexture)(tex);
-      import_fs_extra.default.appendFileSync(
-        import_path6.default.join(this.ctx.objDir, "model.mtl"),
-        `
+      const material = decoded ? `
         newmtl ${texName}
         Kd 1.000 1.000 1.000
         d 1.0
         illum 0
-        map_Kd ${texName}.${ext}
-      `.split("\n").map((s) => s.trim()).join("\n")
+        map_Kd ${texName}.${decoded.extension}
+      ` : `
+        newmtl ${texName}
+        Kd 0.550 0.550 0.550
+        d 1.0
+        illum 0
+      `;
+      import_fs_extra.default.appendFileSync(
+        import_path6.default.join(this.ctx.objDir, "model.mtl"),
+        material.split("\n").map((s) => s.trim()).join("\n")
       );
-      import_fs_extra.default.writeFileSync(import_path6.default.join(this.ctx.objDir, `${texName}.${ext}`), buf);
+      if (decoded) {
+        import_fs_extra.default.writeFileSync(
+          import_path6.default.join(this.ctx.objDir, `${texName}.${decoded.extension}`),
+          decoded.buffer
+        );
+      }
     }
   }
   writeMeshOBJ(meshName, texName, payload, mesh, exclude) {
@@ -14446,16 +14468,28 @@ var NodeSearcher = class {
     const promises = [];
     const results = [];
     const downloadNodes = async (oct) => {
+      let res = false;
       try {
-        results.push({ oct, res: await this.search(k2 + oct, maxLevel) });
+        res = await this.search(k2 + oct, maxLevel);
+      } catch (ex) {
+        console.error(`MRF_DIAG search-failed ${k2}${oct}: ${String(ex).slice(0, 120)}`);
+        res = false;
+      }
+      try {
+        results.push({ oct, res });
         if (results.length === 8) {
-          const octs = results.filter(({ res }) => res).map(({ oct: oct2 }) => oct2);
-          const node = await getNode(k2, check.bulk, check.index);
+          const octs = results.filter(({ res: res2 }) => res2).map(({ oct: oct2 }) => oct2);
+          let node;
+          try {
+            node = await getNode(k2, check.bulk, check.index);
+          } catch (ex) {
+            console.error(`MRF_DIAG node-failed ${k2}: ${String(ex).slice(0, 120)}`);
+            return;
+          }
           try {
             this.nodeDownloadedCallback?.(k2, node, octs);
           } catch (ex) {
-            console.error("Unhandled nodeDownload callback error");
-            throw ex;
+            console.error(`MRF_DIAG write-failed ${k2}: ${String(ex).slice(0, 120)}`);
           }
         }
       } finally {
@@ -14681,6 +14715,9 @@ async function bootstrap() {
   }
   if (argv["center-scale"]) {
     centerScaleObj(OBJ_DIR);
+  }
+  if (ObjWriter.texturesFailed > 0) {
+    emit("textures", { failed: ObjWriter.texturesFailed });
   }
   emit("done", { dir: modelOutDir });
 }

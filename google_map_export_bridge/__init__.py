@@ -36,7 +36,7 @@ bl_info = {
     "description": "Import Google Earth 3D areas as oriented, levelled "
                    "modelling references",
     "author": "Sentics",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Map Export",
     "category": "Import-Export",
@@ -64,6 +64,24 @@ def _handle_command(context, command):
             jobs.MANAGER.record_failure(bbox, error)
         else:
             print("[google-map-export-bridge] export %s started" % job.id)
+
+    elif kind == "retry":
+        # Re-run the last export unchanged. Tiles are fetched again, which is
+        # what recovers a texture that failed to arrive the first time.
+        job = jobs.MANAGER.job
+        if job is None:
+            print("[google-map-export-bridge] nothing to retry")
+            return
+        bbox = job.params.get("bbox")
+        options = command.get("options") or {}
+        if not isinstance(bbox, dict):
+            return
+        started, error = launch.start(context, bbox, options or None)
+        if error:
+            print("[google-map-export-bridge] retry rejected: %s" % error)
+            jobs.MANAGER.record_failure(bbox, error)
+        else:
+            print("[google-map-export-bridge] retry %s started" % started.id)
 
     elif kind == "cancel":
         jobs.MANAGER.cancel()
@@ -97,6 +115,8 @@ def _drain_imports(context):
         options = dict(job.params.get("import_options", {}))
         try:
             summary = importer.import_model(context, job.model_path, options)
+            job.textures_missing = getattr(importer.import_model,
+                                           "last_missing_textures", 0)
         except Exception as exc:                       # noqa: BLE001
             traceback.print_exc()
             jobs.MANAGER.fail(job_id, exc)

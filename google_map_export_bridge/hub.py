@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 DEFAULT_PORT = 8777
 
@@ -491,6 +491,31 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(answer, 400)
                 return
             self._json(answer)
+            return
+
+        if path == "/api/retry":
+            if not self._web_token_ok(payload):
+                return
+            target, problem = self.hub.resolve_instance(
+                (payload or {}).get("instanceId"))
+            if problem:
+                self._json({"error": problem}, 409)
+                return
+
+            inst = self.hub.registry.get(target)
+            if inst is not None and (inst.state or {}).get("busy"):
+                self._json({"error": "That Blender instance is already busy."},
+                           409)
+                return
+
+            options = (payload or {}).get("options") or {}
+            if not isinstance(options, dict):
+                options = {}
+            if not self.hub.registry.push(target, {"type": "retry",
+                                                   "options": options}):
+                self._json({"error": "Could not queue the retry."}, 409)
+                return
+            self._json({"accepted": True, "instanceId": target})
             return
 
         if path == "/api/cancel":

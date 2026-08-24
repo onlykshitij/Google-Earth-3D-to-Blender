@@ -68,12 +68,14 @@ class Semaphore {
 /**
  * Класс для работы с OBJ файлами
  */
-class ObjWriter {
+export class ObjWriter {
   private ctx: ObjContext;
 
   constructor(dir: string) {
     this.ctx = this.initCtxOBJ(dir);
   }
+
+  public static texturesFailed = 0;
 
   private initCtxOBJ(dir: string): ObjContext {
     fs.writeFileSync(path.join(dir, 'model.obj'), `mtllib model.mtl\n`);
@@ -86,25 +88,54 @@ class ObjWriter {
       const tex = mesh.texture;
       const texName = `tex_${nodeName}_${meshIndex}`;
 
+      // Decode before writing anything. Geometry used to be appended first, so
+      // an undecodable texture left triangles in the model with no material and
+      // no image behind them - which is what a black patch is.
+      let decoded: { buffer: Buffer; extension: string } | null = null;
+      try {
+        decoded = decodeTexture(tex);
+      } catch (ex) {
+        ObjWriter.texturesFailed++;
+        console.error(
+          `MRF_DIAG texture-failed ${texName} format=${(tex as any)?.textureFormat}: ${String(ex).slice(0, 120)}`,
+        );
+      }
+
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
       fs.appendFileSync(path.join(this.ctx.objDir, 'model.obj'), obj);
 
-      const { buffer: buf, extension: ext } = decodeTexture(tex);
-      fs.appendFileSync(
-        path.join(this.ctx.objDir, 'model.mtl'),
-        `
+      // A material is always written, so geometry is never orphaned. Without a
+      // usable image it gets a neutral grey, which reads as "no texture here"
+      // rather than as a hole.
+      const material = decoded
+        ? `
         newmtl ${texName}
         Kd 1.000 1.000 1.000
         d 1.0
         illum 0
-        map_Kd ${texName}.${ext}
+        map_Kd ${texName}.${decoded.extension}
       `
+        : `
+        newmtl ${texName}
+        Kd 0.550 0.550 0.550
+        d 1.0
+        illum 0
+      `;
+
+      fs.appendFileSync(
+        path.join(this.ctx.objDir, 'model.mtl'),
+        material
           .split('\n')
           .map((s) => s.trim())
           .join('\n'),
       );
 
-      fs.writeFileSync(path.join(this.ctx.objDir, `${texName}.${ext}`), buf);
+      if (decoded) {
+        fs.writeFileSync(
+          path.join(this.ctx.objDir, `${texName}.${decoded.extension}`),
+          decoded.buffer,
+        );
+      }
     }
   }
 
@@ -323,16 +354,35 @@ class NodeSearcher {
     const results: Array<{ oct: number; res: boolean }> = [];
 
     const downloadNodes = async (oct: number): Promise<void> => {
+      // The outcome is recorded even when the search throws. Recording it only
+      // on success left `results` short of 8 whenever one sub-octant failed,
+      // and since the parent is written inside that check, the parent's
+      // geometry was dropped entirely - a node-sized hole in the model.
+      let res = false;
       try {
-        results.push({ oct, res: await this.search(k + oct, maxLevel) });
+        res = await this.search(k + oct, maxLevel);
+      } catch (ex) {
+        console.error(`MRF_DIAG search-failed ${k}${oct}: ${String(ex).slice(0, 120)}`);
+        res = false;
+      }
+
+      try {
+        results.push({ oct, res });
         if (results.length === 8) {
+          // Only sub-octants that produced geometry are excluded. Excluding a
+          // failed one would cut a hole its child never fills.
           const octs = results.filter(({ res }) => res).map(({ oct }) => oct);
-          const node = await getNode(k, check!.bulk, check!.index);
+          let node;
+          try {
+            node = await getNode(k, check!.bulk, check!.index);
+          } catch (ex) {
+            console.error(`MRF_DIAG node-failed ${k}: ${String(ex).slice(0, 120)}`);
+            return;
+          }
           try {
             this.nodeDownloadedCallback?.(k, node, octs);
           } catch (ex) {
-            console.error('Unhandled nodeDownload callback error');
-            throw ex;
+            console.error(`MRF_DIAG write-failed ${k}: ${String(ex).slice(0, 120)}`);
           }
         }
       } finally {

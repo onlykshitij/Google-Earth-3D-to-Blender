@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Google Map Export Bridge">
+  <title>Google Map Export Bridge</title>
+
+  <!--
+    An original mark rather than either company's logo, so nothing is passed off
+    as Google's or Blender's.
+
+    It reads as one idea: a globe being turned into geometry. The left half is
+    still map - earth blues and greens - while the right half has become a
+    wireframe with vertices on it, in the orange the 3D side of the world tends
+    to use. The equator carries straight across as a seam, which is the bridge.
+  -->
+
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a4a"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+
+    <linearGradient id="ocean" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#3d9be9"/>
+      <stop offset="1" stop-color="#1f6fbf"/>
+    </linearGradient>
+
+    <linearGradient id="wire" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffa94d"/>
+      <stop offset="1" stop-color="#e8730d"/>
+    </linearGradient>
+
+    <!-- Keeps every drawn half inside the sphere. -->
+    <clipPath id="globe">
+      <circle cx="256" cy="256" r="168"/>
+    </clipPath>
+
+    <clipPath id="leftHalf">
+      <rect x="88" y="88" width="168" height="336"/>
+    </clipPath>
+
+    <clipPath id="rightHalf">
+      <rect x="256" y="88" width="168" height="336"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded-square app tile. -->
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <rect x="1" y="1" width="510" height="510" rx="111" fill="none"
+        stroke="#ffffff" stroke-opacity="0.07" stroke-width="2"/>
+
+  <!-- The sphere. -->
+  <circle cx="256" cy="256" r="168" fill="url(#ocean)"/>
+
+  <!-- Map half: simplified land, no real coastline, just enough to read as earth. -->
+  <g clip-path="url(#globe)">
+    <g clip-path="url(#leftHalf)">
+      <path d="M96 168 C132 150 176 158 206 180 C232 199 220 232 190 240
+               C158 249 140 274 152 300 C163 324 140 344 110 340
+               C96 338 88 330 88 316 Z"
+            fill="#4caf6d" fill-opacity="0.95"/>
+      <path d="M120 360 C150 350 186 362 200 386 C212 406 196 424 172 424
+               C144 424 118 404 112 382 C109 370 112 363 120 360 Z"
+            fill="#3f9a5e" fill-opacity="0.9"/>
+      <path d="M186 96 C210 92 236 102 246 120 C254 134 242 148 224 146
+               C202 143 184 126 182 110 C181 102 183 97 186 96 Z"
+            fill="#4caf6d" fill-opacity="0.8"/>
+    </g>
+
+    <!-- Wireframe half: the same globe, become geometry. -->
+    <g clip-path="url(#rightHalf)">
+      <rect x="256" y="88" width="168" height="336" fill="#0d1526"
+            fill-opacity="0.55"/>
+      <g fill="none" stroke="url(#wire)" stroke-width="5"
+         stroke-linecap="round" stroke-linejoin="round">
+        <!-- Latitude bands. -->
+        <path d="M256 118 C318 128 366 150 396 180"/>
+        <path d="M256 190 C330 196 384 214 414 238"/>
+        <path d="M256 256 H424"/>
+        <path d="M256 322 C330 316 384 298 414 274"/>
+        <path d="M256 394 C318 384 366 362 396 332"/>
+        <!-- Meridians. -->
+        <path d="M256 88 C300 150 300 362 256 424"/>
+        <path d="M256 88 C348 150 348 362 256 424"/>
+        <path d="M256 88 C404 150 404 362 256 424"/>
+      </g>
+
+      <!-- Vertices, which is what makes it read as editable geometry. -->
+      <g fill="#ffd8a8">
+        <circle cx="256" cy="256" r="9"/>
+        <circle cx="330" cy="196" r="7"/>
+        <circle cx="330" cy="316" r="7"/>
+        <circle cx="396" cy="180" r="6"/>
+        <circle cx="396" cy="332" r="6"/>
+        <circle cx="414" cy="256" r="6"/>
+        <circle cx="300" cy="128" r="6"/>
+        <circle cx="300" cy="384" r="6"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- The seam where map becomes mesh. -->
+  <line x1="256" y1="88" x2="256" y2="424" stroke="#ffffff"
+        stroke-opacity="0.5" stroke-width="3"/>
+
+  <!-- Sphere edge, drawn last so both halves sit inside it. -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#0b1220"
+          stroke-opacity="0.55" stroke-width="6"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#ffffff"
+          stroke-opacity="0.22" stroke-width="2"/>
+</svg>

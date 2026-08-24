@@ -66,6 +66,23 @@ export function browse(token: string, instanceId: string, path: string) {
   });
 }
 
+/**
+ * Run the last export again, unchanged.
+ *
+ * Tiles are fetched afresh, which is what recovers textures that failed to
+ * arrive the first time.
+ */
+export function retryExport(
+  token: string,
+  instanceId: string,
+  options: ExportOptions,
+) {
+  return request<{ accepted: boolean }>("api/retry", {
+    method: "POST",
+    body: JSON.stringify({ token, instanceId, options }),
+  });
+}
+
 export function cancelExport(token: string, instanceId: string) {
   return request<{ cancelled: boolean }>("api/cancel", {
     method: "POST",

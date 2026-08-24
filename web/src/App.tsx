@@ -130,6 +130,16 @@ export default function App() {
     }
   };
 
+  const handleRetry = async () => {
+    if (!session || !selected) return;
+    setError(null);
+    try {
+      await api.retryExport(session.token, selected.id, options);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const handleCancel = async () => {
     if (!session || !selected) return;
     try {
@@ -273,6 +283,7 @@ export default function App() {
           busy={jobRunning}
           error={error}
           onExport={handleExport}
+          onRetry={handleRetry}
           onCancel={handleCancel}
         />
       </div>

@@ -17,9 +17,13 @@ const STEPS = ["downloading", "converting", "importing"] as const;
 export function ProgressCard({
   job,
   onCancel,
+  onRetry,
+  canRetry,
 }: {
   job: Job;
   onCancel: () => void;
+  onRetry?: () => void;
+  canRetry?: boolean;
 }) {
   const running = !TERMINAL_PHASES.includes(job.phase);
   const failed = job.phase === "error";
@@ -79,6 +83,30 @@ export function ProgressCard({
         <p className="mt-2 rounded-lg border border-[var(--color-bad)]/30 bg-[var(--color-bad)]/10 px-2.5 py-2 text-xs leading-snug text-[#ffb3b3]">
           {job.error}
         </p>
+      )}
+
+      {done && job.model && (job.model.texturesMissing > 0 ||
+                             job.model.texturesFailed > 0) && (
+        <div className="mt-2 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-2.5 py-2">
+          <p className="text-[11px] leading-snug text-[#f7d78a]">
+            <strong className="font-medium">Missing textures.</strong>{" "}
+            {job.model.texturesMissing || job.model.texturesFailed} tile
+            {(job.model.texturesMissing || job.model.texturesFailed) === 1
+              ? " "
+              : "s "}
+            arrived without a usable image, so those patches have no texture.
+            Running the export again re-fetches them.
+          </p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              disabled={!canRetry}
+              className="btn-ghost mt-1.5 w-full !py-1 !text-[11px]"
+            >
+              Re-run export
+            </button>
+          )}
+        </div>
       )}
 
       {done && job.model && job.model.coverage !== "3d" && job.model.coverageNote && (

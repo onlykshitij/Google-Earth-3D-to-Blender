@@ -38,13 +38,39 @@ REQUIRED = [
 
 
 def read_version():
-    """Take the version from bl_info so there is a single source of truth."""
+    """
+    Take the version from bl_info, and check nothing else disagrees.
+
+    The version is declared three times - bl_info for the add-on, VERSION in
+    hub.py for the interface to report, and the extension manifest - because
+    none of them can import the others. So the one place that sees all three
+    checks they match, rather than letting them drift apart silently.
+    """
     with open(os.path.join(ADDON, "__init__.py"), encoding="utf-8") as fh:
         text = fh.read()
     match = re.search(r'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)', text)
     if not match:
         sys.exit("Could not read the version from __init__.py")
-    return ".".join(match.groups())
+    version = ".".join(match.groups())
+
+    others = []
+    with open(os.path.join(ADDON, "hub.py"), encoding="utf-8") as fh:
+        found = re.search(r'^VERSION\s*=\s*"([^"]+)"', fh.read(), re.M)
+        others.append(("hub.py VERSION", found.group(1) if found else None))
+
+    manifest = os.path.join(ADDON, "blender_manifest.toml")
+    if os.path.isfile(manifest):
+        with open(manifest, encoding="utf-8") as fh:
+            found = re.search(r'^version\s*=\s*"([^"]+)"', fh.read(), re.M)
+            others.append(("blender_manifest.toml",
+                           found.group(1) if found else None))
+
+    wrong = [(name, value) for name, value in others if value != version]
+    if wrong:
+        detail = "; ".join("%s says %s" % (name, value)
+                           for name, value in wrong)
+        sys.exit("Version mismatch. bl_info says %s, but %s" % (version, detail))
+    return version
 
 
 def build_web():

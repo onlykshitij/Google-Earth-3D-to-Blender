@@ -1,8 +1,20 @@
-# Google Map Export Bridge
+<p align="center">
+  <img src="docs/images/icon-256.png" alt="Google Map Export Bridge" width="132" height="132">
+</p>
 
-Pick an area on a map in your browser, press one button, and it arrives in the
-Blender scene you chose — upright, at real-world scale, with the ground flat on
-the floor.
+<h1 align="center">Google Map Export Bridge</h1>
+
+<p align="center">
+  Pick an area on a map in your browser, press one button, and it arrives in the
+  Blender scene you chose — upright, at real-world scale, with the ground flat
+  on the floor.
+</p>
+
+<p align="center">
+  <a href="https://github.com/onlykshitij/Google-Earth-3D-to-Blender/releases/latest"><img src="https://img.shields.io/github/v/release/onlykshitij/Google-Earth-3D-to-Blender?label=add-on&color=e8730d" alt="Latest release"></a>
+  <a href="https://github.com/onlykshitij/Google-Earth-3D-to-Blender/pkgs/container/google-earth-3d-to-blender"><img src="https://img.shields.io/badge/ghcr.io-image-3d9be9" alt="Container image"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-AGPL--3.0-4caf6d" alt="AGPL-3.0"></a>
+</p>
 
 ## Built on
 
@@ -325,6 +337,33 @@ You get either *No 3D coverage* ("draped imagery over flat terrain, with no
 buildings") or *Thin coverage* with the numbers behind it. Both appear in the
 page and in Blender's panel, so you know before you start modelling.
 
+### Untextured patches, and re-running
+
+A tile can arrive without its image — a format the decoder does not know, a
+write that failed, a cache cleared underneath the model. The geometry is there
+but nothing is painted on it, which in the viewport reads as a black or grey
+patch and looks like a hole in the model.
+
+Every material is now checked after import, whatever the cause, and the count is
+reported next to the export. When any are missing you get a **Re-run export**
+button: tiles are fetched again from scratch, which is what recovers one that
+failed to arrive.
+
+Three things changed in the exporter to make this rarer:
+
+- A sub-tile that fails no longer takes its parent down with it. The parent was
+  written only once all eight children had reported, and a child that threw
+  never reported at all — so one failure silently dropped a whole node's
+  geometry, leaving a node-sized hole.
+- A tile that fails to decode no longer leaves orphaned geometry. The mesh used
+  to be written before the texture was decoded, so a decode failure left
+  triangles with no material behind them. The texture is decoded first now.
+- A material is always written, with a neutral grey when there is no image, so a
+  missing texture reads as missing rather than as a void.
+
+Network failures were already retried five times with exponential backoff, so
+that part was never the cause.
+
 ### Where the files go
 
 By default downloads land in a temporary cache. Set an **Export folder** — in
@@ -567,6 +606,11 @@ have said so.
 **It is very slow.** The exporter probes a fixed 0.0001° lattice over the box, so
 cost scales with area. The panel shows the point count; above ~10,000 expect ten
 minutes or more.
+
+**Black or untextured patches in the model.** Some tiles arrived without their
+image. The export report says how many and offers **Re-run export**, which
+re-fetches them. See
+[Untextured patches, and re-running](#untextured-patches-and-re-running).
 
 **Ground looks wrong.** The report gives the ground fit as inlier cells and RMS. A
 high RMS or very few inliers means the fit was unsure — try a larger **Ground

@@ -28,6 +28,7 @@ type Props = {
   busy: boolean;
   error: string | null;
   onExport: () => void;
+  onRetry: () => void;
   onCancel: () => void;
 };
 
@@ -354,7 +355,14 @@ export function Sidebar(props: Props) {
           </p>
         )}
 
-        {job && <ProgressCard job={job} onCancel={props.onCancel} />}
+        {job && (
+          <ProgressCard
+            job={job}
+            onCancel={props.onCancel}
+            onRetry={props.onRetry}
+            canRetry={!props.busy}
+          />
+        )}
 
         <button
           onClick={props.onExport}
