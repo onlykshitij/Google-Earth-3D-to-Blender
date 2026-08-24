@@ -85,6 +85,19 @@ export function ProgressCard({
         </p>
       )}
 
+      {done && job.model && job.model.texturesBlank > 0 && (
+        <p className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-2 text-[11px] leading-snug text-ink-400">
+          <strong className="font-medium text-ink-300">
+            {job.model.texturesBlank} tile
+            {job.model.texturesBlank === 1 ? "" : "s"} without imagery.
+          </strong>{" "}
+          Google has geometry but no picture for {job.model.texturesBlank === 1
+            ? "that patch"
+            : "those patches"}, so they come in plain grey. Re-running will not
+          change it — the imagery is not there to fetch.
+        </p>
+      )}
+
       {done && job.model && (job.model.texturesMissing > 0 ||
                              job.model.texturesFailed > 0) && (
         <div className="mt-2 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-2.5 py-2">

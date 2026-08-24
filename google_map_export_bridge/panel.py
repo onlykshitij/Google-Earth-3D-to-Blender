@@ -95,6 +95,9 @@ class GMEB_PT_main(_Base, Panel):
                                       r.ground_rms_m))
                     col.label(text="%.2f verts/m2, relief %.1f m"
                                    % (r.vertex_density, r.relief_m))
+                    if job.textures_blank:
+                        col.label(text="%d tile(s) had no imagery"
+                                       % job.textures_blank, icon="INFO")
 
                     if r.coverage != "3d" and r.coverage_note:
                         warn = box.column(align=True)

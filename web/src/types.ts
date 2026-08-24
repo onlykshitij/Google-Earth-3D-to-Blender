@@ -42,6 +42,8 @@ export type ModelReport = {
   texturesFailed: number;
   /** Materials that reached the scene without a usable image. */
   texturesMissing: number;
+  /** Tiles Google served blank: real geometry, no imagery. */
+  texturesBlank: number;
 };
 
 export type Job = {

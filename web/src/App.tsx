@@ -17,7 +17,7 @@ const DEFAULT_OPTIONS: ExportOptions = {
   scale: 1,
   joinObjects: false,
   shadeSmooth: true,
-  lockReference: true,
+  lockReference: false,
   adjustClipping: true,
   replacePrevious: false,
   collectionName: "",
@@ -39,7 +39,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [bbox, setBbox] = useState<Bbox | null>(null);
-  const [drawing, setDrawing] = useState(true);
+  // The map pans by default. Starting in drawing mode meant a drag drew a
+  // box instead of moving the map, so you could not get anywhere first.
+  const [drawing, setDrawing] = useState(false);
   const [basemap, setBasemap] = useState<BasemapKey>("dark");
   const [options, setOptionsState] = useState<ExportOptions>(DEFAULT_OPTIONS);
 
@@ -219,7 +221,6 @@ export default function App() {
                   // close enough to draw against buildings straight away.
                   map.flyTo([r.lat, r.lon], r.zoom ?? 18);
                 }
-                setDrawing(true);
               }}
             />
 

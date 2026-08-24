@@ -75,6 +75,8 @@ class Job:
         # scene without a usable image. They usually agree, but not always.
         self.textures_failed = 0
         self.textures_missing = 0
+        # Tiles Google served blank. The geometry is real; the imagery is not.
+        self.textures_blank = 0
         self.report = None      # obj_transform.ObjTransformResult
         self.import_summary = None
         self.cancelled = False
@@ -115,6 +117,7 @@ class Job:
                 "relief": round(r.relief_m, 1),
                 "achievedLevel": self.achieved_level,
                 "texturesFailed": self.textures_failed,
+                "texturesBlank": self.textures_blank,
                 "texturesMissing": self.textures_missing,
             }
         return d
@@ -361,11 +364,14 @@ class JobManager:
                         remote_error = data.get("message") or "Exporter failed"
                     elif event == "textures":
                         failed = int(data.get("failed", 0) or 0)
-                        if failed:
-                            job.textures_failed = failed
-                            self._set(message="%d tile%s had no usable texture"
-                                              % (failed,
-                                                 "" if failed == 1 else "s"))
+                        blank = int(data.get("blank", 0) or 0)
+                        job.textures_failed = failed
+                        job.textures_blank = blank
+                        if failed or blank:
+                            self._set(message="%d tile%s without imagery"
+                                              % (failed + blank,
+                                                 "" if failed + blank == 1
+                                                 else "s"))
 
                     elif event == "octants":
                         # The deepest level Google actually has here. Less than

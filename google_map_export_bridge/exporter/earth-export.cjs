@@ -9009,7 +9009,11 @@ var require_decode_texture = __commonJS({
       switch (texture.textureFormat) {
         // jpeg (saved as .jpg)
         case 1:
-          return { extension: "jpg", buffer: new Buffer(texture.bytes) };
+          return {
+            extension: "jpg",
+            buffer: new Buffer(texture.bytes),
+            blackFraction: 0
+          };
         // dxt1 (saved as .bmp)
         case 6:
           const bytes = texture.bytes;
@@ -9029,7 +9033,18 @@ var require_decode_texture = __commonJS({
             width: texture.width,
             height: texture.height
           });
-          return { extension: "bmp", buffer: Buffer.from(rawData.data) };
+          let dark = 0;
+          const pixels = rgbaData.length / 4;
+          for (let i = 0; i < rgbaData.length; i += 4) {
+            if (rgbaData[i] < 8 && rgbaData[i + 1] < 8 && rgbaData[i + 2] < 8) {
+              dark++;
+            }
+          }
+          return {
+            extension: "bmp",
+            buffer: Buffer.from(rawData.data),
+            blackFraction: pixels ? dark / pixels : 0
+          };
         default:
           throw `unknown textureFormat ${texture.textureFormat}`;
       }
@@ -14266,10 +14281,22 @@ var ObjWriter = class _ObjWriter {
     // copies of a mesh z-fight, which looks like corruption rather than like
     // duplication, so it is worth refusing outright.
     this.written = /* @__PURE__ */ new Set();
+    // Nodes skipped because Google's texture for them is blank. Their parent
+    // must then keep the triangles it would otherwise have handed over.
+    this.skipped = /* @__PURE__ */ new Set();
     this.ctx = this.initCtxOBJ(dir);
   }
   static {
     this.texturesFailed = 0;
+  }
+  static {
+    // Tiles Google served with no imagery on them.
+    this.tilesBlank = 0;
+  }
+  static {
+    // A tile this black carries no imagery; anything less may just be night,
+    // deep shade, or dark tarmac, which are all legitimate.
+    this.BLACK_TILE_FRACTION = 0.95;
   }
   initCtxOBJ(dir) {
     import_fs_extra.default.writeFileSync(import_path6.default.join(dir, "model.obj"), `mtllib model.mtl
@@ -14282,18 +14309,40 @@ var ObjWriter = class _ObjWriter {
       return;
     }
     this.written.add(nodeName);
+    const decodedMeshes = /* @__PURE__ */ new Map();
+    let usable = 0;
+    let considered = 0;
+    for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
+      considered++;
+      let decoded = null;
+      try {
+        const d2 = (0, import_decode_texture.decodeTexture)(mesh.texture);
+        const black = typeof d2.blackFraction === "number" ? d2.blackFraction : 0;
+        if (black < _ObjWriter.BLACK_TILE_FRACTION) {
+          usable++;
+        }
+        decoded = d2;
+      } catch (ex) {
+        _ObjWriter.texturesFailed++;
+        console.error(
+          `MRF_DIAG texture-failed ${nodeName}_${meshIndex} format=${mesh.texture?.textureFormat}: ${String(ex).slice(0, 120)}`
+        );
+      }
+      decodedMeshes.set(meshIndex, decoded);
+    }
+    if (considered > 0 && usable === 0) {
+      this.skipped.add(nodeName);
+      console.error(`MRF_DIAG blank-texture ${nodeName} skipped, parent will cover it`);
+      return;
+    }
     for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
       const meshName = `${nodeName}_${meshIndex}`;
       const tex = mesh.texture;
       const texName = `tex_${nodeName}_${meshIndex}`;
-      let decoded = null;
-      try {
-        decoded = (0, import_decode_texture.decodeTexture)(tex);
-      } catch (ex) {
-        _ObjWriter.texturesFailed++;
-        console.error(
-          `MRF_DIAG texture-failed ${texName} format=${tex?.textureFormat}: ${String(ex).slice(0, 120)}`
-        );
+      let decoded = decodedMeshes.get(meshIndex) ?? null;
+      if (decoded && typeof decoded.blackFraction === "number" && decoded.blackFraction >= _ObjWriter.BLACK_TILE_FRACTION) {
+        _ObjWriter.tilesBlank++;
+        decoded = null;
       }
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
       import_fs_extra.default.appendFileSync(import_path6.default.join(this.ctx.objDir, "model.obj"), obj);
@@ -14573,7 +14622,9 @@ var DumpObjApp = class {
   nodeDownloaded(path4, node, octantsToExclude) {
     console.log("downloaded", path4);
     if (DUMP_OBJ && this.objWriter) {
-      this.objWriter.writeNode(node, path4, octantsToExclude);
+      const writer = this.objWriter;
+      const exclude = octantsToExclude.filter((oct) => !writer.skipped.has(path4 + oct));
+      writer.writeNode(node, path4, exclude);
     }
   }
 };
@@ -14734,8 +14785,11 @@ async function bootstrap() {
   if (argv["center-scale"]) {
     centerScaleObj(OBJ_DIR);
   }
-  if (ObjWriter.texturesFailed > 0) {
-    emit("textures", { failed: ObjWriter.texturesFailed });
+  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0) {
+    emit("textures", {
+      failed: ObjWriter.texturesFailed,
+      blank: ObjWriter.tilesBlank
+    });
   }
   emit("done", { dir: modelOutDir });
 }

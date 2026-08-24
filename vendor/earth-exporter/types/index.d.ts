@@ -9,6 +9,12 @@ export interface Texture {
 }
 
 export interface DecodedTexture {
+  /**
+   * How much of the decoded image is black, from 0 to 1. Google serves blank
+   * black textures for some tiles; a node made only of those is skipped so its
+   * parent covers the ground instead.
+   */
+  blackFraction?: number;
   extension: 'jpg' | 'bmp';
   buffer: Buffer;
 }

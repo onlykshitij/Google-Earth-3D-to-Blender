@@ -377,6 +377,27 @@ the duplicates.
 and running the export again on 1.1.1 is quicker than trying to deduplicate in
 place.
 
+### Tiles Google serves blank
+
+Some level-20 tiles come back with a texture that is deliberately black - the
+DXT1 blocks encode almost nothing but `(0, 0, 0)`. The geometry is real, the
+imagery simply is not there. Painted onto the model it reads as a hole, which is
+what "missing textures" usually turns out to be.
+
+Two things happen now:
+
+- If **every** mesh of a node is blank, the node is not written at all and its
+  parent keeps the triangles it would have handed over. The parent's imagery is
+  a level coarser, but it is real.
+- If only **some** meshes of a node are blank, the parent cannot help - it gave
+  this node the whole octant - so those get a neutral grey material. Grey reads
+  as "no imagery here"; black reads as a hole.
+
+Measured on one area: 52 black textures became **none**, with 6 nodes handed
+back to their parents and 8 meshes falling back to grey. The count is reported
+with the export, and re-running will not change it - the imagery is not there to
+fetch.
+
 ### Untextured patches, and re-running
 
 A tile can arrive without its image — a format the decoder does not know, a
@@ -525,7 +546,7 @@ Two details worth knowing if you touch this:
 | Export folder | temp cache | Folder to download into and import from; each export gets a dated subfolder. |
 | Collection | auto | Named after the coordinates when empty. |
 | Replace previous import | off | Delete earlier imports from this add-on first. |
-| Lock in place | on | Make the reference unselectable. |
+| Lock in place | off | Make the reference unselectable, so it cannot be nudged while modelling against it. |
 | Join into one object | off | Merge tiles into a single mesh. |
 | Smooth shading | on | Google's meshes are dense enough that this reads better. |
 | Fit view clipping | on | Widen the viewport clip range if the model would be clipped. |

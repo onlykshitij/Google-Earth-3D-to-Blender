@@ -101,9 +101,11 @@ class GMEB_Properties(PropertyGroup):
     )
     lock_reference: BoolProperty(
         name="Lock In Place",
-        description="Make the imported objects unselectable, so they cannot be "
-                    "nudged while you model against them",
-        default=True,
+        description="Make the imported reference unselectable, so it cannot be "
+                    "nudged while modelling against it. Off by default: it is "
+                    "easier to turn on when it gets in the way than to work out "
+                    "why nothing will select",
+        default=False,
     )
     adjust_clipping: BoolProperty(
         name="Fit View Clipping",

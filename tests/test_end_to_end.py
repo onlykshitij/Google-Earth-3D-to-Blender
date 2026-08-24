@@ -194,7 +194,7 @@ status, resp = post("/api/export", {
     "bbox": BBOX,
     "options": {"level": 20, "levelGround": True, "groundCellSize": 4.0,
                 "scale": 1.0, "trimSubGround": True, "trimDepth": 2.0,
-                "shadeSmooth": True, "lockReference": True,
+                "shadeSmooth": True,
                 "replacePrevious": True, "collectionName": "E2E"},
 })
 check("export accepted", status == 200 and resp.get("accepted"), resp)
@@ -270,7 +270,29 @@ if job and job.phase == jobs.PHASE_DONE:
     check("buildings extend upward", max(zs) > 5, "max z %.1f m" % max(zs))
     check("sub-ground geometry trimmed", min(zs) > -12,
           "min z %.1f m" % min(zs))
-    check("objects locked", all(o.hide_select for o in objs))
+    check("objects are selectable by default",
+          all(not o.hide_select for o in objs))
+
+    # A texture that decodes to black is the thing that looks like a hole.
+    import struct as _struct
+
+    def _mostly_black(path):
+        with open(path, "rb") as fh:
+            data = fh.read()
+        if data[:2] != b"BM":
+            return False
+        offset = _struct.unpack_from("<I", data, 10)[0]
+        px = data[offset:]
+        step = max(3, (len(px) // 3000) * 3)
+        vals = [max(px[i:i + 3]) for i in range(0, len(px) - 3, step)]
+        return bool(vals) and sum(1 for v in vals if v < 6) / len(vals) > 0.95
+
+    tex_dir = job.output_dir or ""
+    tex_files = [os.path.join(tex_dir, f) for f in os.listdir(tex_dir)
+                 if f.startswith("tex_") and f.endswith(".bmp")] if tex_dir else []
+    black_files = [f for f in tex_files if _mostly_black(f)]
+    check("no blank-black textures were written",
+          not black_files, "%d of %d" % (len(black_files), len(tex_files)))
 
     tex_nodes = [n for o in objs for s in o.material_slots
                  if s.material and s.material.use_nodes

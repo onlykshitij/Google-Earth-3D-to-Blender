@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { decodeTexture } from './utils/decode-texture';
+import { DecodedTexture } from '../types';
 import initUtils from './utils/utils';
 import type { Node, Mesh, ObjContext, NodeCheckResult, Bulk } from '../types';
 import { URL_PREFIX, DL_DIR } from './constants/constants';
@@ -77,10 +78,21 @@ export class ObjWriter {
 
   public static texturesFailed = 0;
 
+  // Tiles Google served with no imagery on them.
+  public static tilesBlank = 0;
+
   // Guards against a node being written more than once. Two coincident
   // copies of a mesh z-fight, which looks like corruption rather than like
   // duplication, so it is worth refusing outright.
   private readonly written = new Set<string>();
+
+  // Nodes skipped because Google's texture for them is blank. Their parent
+  // must then keep the triangles it would otherwise have handed over.
+  public readonly skipped = new Set<string>();
+
+  // A tile this black carries no imagery; anything less may just be night,
+  // deep shade, or dark tarmac, which are all legitimate.
+  public static readonly BLACK_TILE_FRACTION = 0.95;
 
   private initCtxOBJ(dir: string): ObjContext {
     fs.writeFileSync(path.join(dir, 'model.obj'), `mtllib model.mtl\n`);
@@ -94,22 +106,52 @@ export class ObjWriter {
     }
     this.written.add(nodeName);
 
+    // Decode every mesh's texture up front. If none of them carry imagery the
+    // node is not written at all, so its parent can cover the ground instead.
+    const decodedMeshes = new Map<string, DecodedTexture | null>();
+    let usable = 0;
+    let considered = 0;
+    for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
+      considered++;
+      let decoded = null;
+      try {
+        const d = decodeTexture(mesh.texture);
+        const black = typeof d.blackFraction === 'number' ? d.blackFraction : 0;
+        if (black < ObjWriter.BLACK_TILE_FRACTION) {
+          usable++;
+        }
+        decoded = d;
+      } catch (ex) {
+        ObjWriter.texturesFailed++;
+        console.error(
+          `MRF_DIAG texture-failed ${nodeName}_${meshIndex} format=${(mesh.texture as any)?.textureFormat}: ${String(ex).slice(0, 120)}`,
+        );
+      }
+      decodedMeshes.set(meshIndex, decoded);
+    }
+
+    if (considered > 0 && usable === 0) {
+      this.skipped.add(nodeName);
+      console.error(`MRF_DIAG blank-texture ${nodeName} skipped, parent will cover it`);
+      return;
+    }
+
+
     for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
       const meshName = `${nodeName}_${meshIndex}`;
       const tex = mesh.texture;
       const texName = `tex_${nodeName}_${meshIndex}`;
 
-      // Decode before writing anything. Geometry used to be appended first, so
-      // an undecodable texture left triangles in the model with no material and
-      // no image behind them - which is what a black patch is.
-      let decoded: { buffer: Buffer; extension: string } | null = null;
-      try {
-        decoded = decodeTexture(tex);
-      } catch (ex) {
-        ObjWriter.texturesFailed++;
-        console.error(
-          `MRF_DIAG texture-failed ${texName} format=${(tex as any)?.textureFormat}: ${String(ex).slice(0, 120)}`,
-        );
+      // Already decoded above, where the node-level decision was made. A
+      // single blank mesh inside an otherwise good node cannot be handed back
+      // to the parent - the parent gave this node the whole octant - so it is
+      // written with the neutral grey instead. Grey reads as "no imagery
+      // here"; black reads as a hole in the model.
+      let decoded = decodedMeshes.get(meshIndex) ?? null;
+      if (decoded && typeof decoded.blackFraction === 'number' &&
+          decoded.blackFraction >= ObjWriter.BLACK_TILE_FRACTION) {
+        ObjWriter.tilesBlank++;
+        decoded = null;
       }
 
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
@@ -487,7 +529,12 @@ export class DumpObjApp {
   private nodeDownloaded(path: string, node: Node, octantsToExclude: number[]): void {
     console.log('downloaded', path);
     if (DUMP_OBJ && this.objWriter) {
-      this.objWriter.writeNode(node, path, octantsToExclude);
+      // A child that was skipped for having no imagery writes nothing, so its
+      // triangles have to stay with this node - otherwise that patch of ground
+      // is simply absent.
+      const writer = this.objWriter;
+      const exclude = octantsToExclude.filter((oct) => !writer.skipped.has(path + oct));
+      writer.writeNode(node, path, exclude);
     }
   }
 }

@@ -133,8 +133,11 @@ async function bootstrap() {
 
   // Tell the caller if any tile arrived in a format we cannot decode, so a
   // model with untextured patches explains itself instead of looking broken.
-  if (ObjWriter.texturesFailed > 0) {
-    emit('textures', { failed: ObjWriter.texturesFailed });
+  if (ObjWriter.texturesFailed > 0 || ObjWriter.tilesBlank > 0) {
+    emit('textures', {
+      failed: ObjWriter.texturesFailed,
+      blank: ObjWriter.tilesBlank,
+    });
   }
 
   emit('done', { dir: modelOutDir });
