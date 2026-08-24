@@ -129,8 +129,60 @@ if instances:
     check("instance reports its identity",
           bool(info.get("blenderVersion")) and info.get("hosting") is True, info)
     check("instance reports node availability", info.get("nodeFound") is True)
+    check("the detail level offered is capped at 20",
+          (info.get("defaults") or {}).get("level", 0) <= 20,
+          (info.get("defaults") or {}).get("level"))
 
 instance_id = instances[0]["id"] if instances else ""
+
+# --- folder browsing, answered by the agent on this machine ------------------
+import threading  # noqa: E402
+
+browse_result = {}
+
+
+def do_browse(path):
+    """Browse from another thread: the request blocks until the agent answers."""
+    def run():
+        try:
+            browse_result[path] = post("/api/browse", {
+                "token": session["token"],
+                "instanceId": instance_id,
+                "path": path,
+            })
+        except Exception as exc:                        # noqa: BLE001
+            browse_result[path] = (0, {"error": str(exc)})
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    # The agent answers on its own thread, but the add-on's timer still has to
+    # be driven for everything else, so keep pumping while waiting.
+    for _ in range(120):
+        if path in browse_result:
+            break
+        mod._tick()
+        time.sleep(0.1)
+    worker.join(timeout=2)
+    return browse_result.get(path, (0, {"error": "no answer"}))
+
+here = os.path.dirname(os.path.abspath(__file__))
+status, body = do_browse(here)
+check("browse lists a real folder",
+      status == 200 and body.get("path") == here, body.get("error") or status)
+check("browse returns only folders",
+      all("." not in e["name"] or os.path.isdir(e["path"])
+          for e in body.get("entries", [])),
+      "%d entries" % len(body.get("entries", [])))
+check("browse offers roots to start from", len(body.get("roots") or []) > 0,
+      body.get("roots"))
+check("browse reports whether it can be written to",
+      body.get("writable") is True)
+
+status, body = do_browse(os.path.join(here, "definitely-not-there"))
+check("browsing a missing folder explains itself",
+      status == 400 and "not a folder" in (body.get("error") or ""),
+      body.get("error"))
+
 
 # --- run an export exactly as the interface does -----------------------------
 BBOX = {"minLat": 43.72300, "minLng": 10.39400,

@@ -1,4 +1,4 @@
-import type { Bbox, ExportOptions, Instance, Session } from "./types";
+import type { Bbox, ExportOptions, Instance, Listing, Session } from "./types";
 
 /**
  * Client for the hub.
@@ -50,6 +50,19 @@ export function startExport(
   return request<{ accepted: boolean; instanceId: string }>("api/export", {
     method: "POST",
     body: JSON.stringify({ token, instanceId, bbox, options }),
+  });
+}
+
+/**
+ * List folders on the machine running the chosen Blender.
+ *
+ * The browser cannot see that filesystem - it may not even be the same machine
+ * - so the hub relays the question to the agent and waits for its answer.
+ */
+export function browse(token: string, instanceId: string, path: string) {
+  return request<Listing>("api/browse", {
+    method: "POST",
+    body: JSON.stringify({ token, instanceId, path }),
   });
 }
 

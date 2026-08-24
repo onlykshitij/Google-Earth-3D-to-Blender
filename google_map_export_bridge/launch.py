@@ -15,6 +15,9 @@ import bpy
 
 from . import agent, connect, jobs, prefs
 
+# See PRACTICAL_MAX_LEVEL in obj_transform for why 20 and not 21.
+MAX_USEFUL_LEVEL = 20
+
 
 def exporter_script() -> str:
     return os.path.join(os.path.dirname(__file__), "exporter", "earth-export.cjs")
@@ -139,7 +142,11 @@ def build_params(context, bbox, options=None):
         "script_path": exporter_script(),
         "job_dir": job_dir,
         "bbox": bbox,
-        "level": int(_pick(options, "level", settings.level)),
+        # Clamped because the interface is not the only caller: the API
+        # accepts a level directly, and above 20 the exporter returns less
+        # geometry for twice the download.
+        "level": max(2, min(MAX_USEFUL_LEVEL,
+                            int(_pick(options, "level", settings.level)))),
         "level_ground": bool(_pick(options, "levelGround", settings.level_ground)),
         "ground_cell_size": float(_pick(options, "groundCellSize",
                                         settings.ground_cell_size)),

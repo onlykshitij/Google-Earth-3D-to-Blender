@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FolderPicker } from "./FolderPicker";
 import type { Bbox, ExportOptions, Instance, Job } from "../types";
 import { instanceLabel } from "../types";
 import {
@@ -12,6 +13,7 @@ import { Card, NumberField, Slider, Stat, Toggle } from "./ui";
 import { ProgressCard } from "./ProgressCard";
 
 type Props = {
+  token: string;
   instance: Instance | null;
   onlineCount: number;
   hubConnected: boolean;
@@ -35,6 +37,7 @@ export function Sidebar(props: Props) {
   const hasArea = bbox !== null && !isEmpty(bbox);
   const size = hasArea ? bboxSize(bbox!) : null;
   const [showFields, setShowFields] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const info = instance?.info ?? {};
   const blocked = props.busy || !hasArea || !instance;
@@ -151,7 +154,7 @@ export function Sidebar(props: Props) {
           value={options.level}
           onChange={(v) => setOptions({ level: v })}
           min={14}
-          max={21}
+          max={20}
           format={(v) => `${v}`}
         />
         <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
@@ -217,16 +220,41 @@ export function Sidebar(props: Props) {
 
       {/* --- files --------------------------------------------------------- */}
       <Card title="Files">
-        <label className="block">
-          <span className="field-label">Export folder</span>
+        <span className="field-label">Export folder</span>
+        <div className="mt-1 flex gap-1.5">
           <input
-            className="input mt-1"
+            className="input min-w-0 flex-1"
             placeholder="temporary download cache"
             value={options.exportDir}
             onChange={(e) => setOptions({ exportDir: e.target.value })}
             spellCheck={false}
           />
-        </label>
+          <button
+            onClick={() => setPicking(true)}
+            disabled={!instance}
+            className="btn-ghost shrink-0"
+            title={
+              instance
+                ? "Browse folders on the machine running that Blender"
+                : "Connect a Blender first"
+            }
+          >
+            Browse…
+          </button>
+        </div>
+
+        {picking && instance && (
+          <FolderPicker
+            token={props.token}
+            instanceId={instance.id}
+            startPath={options.exportDir}
+            onPick={(path) => {
+              setOptions({ exportDir: path });
+              setPicking(false);
+            }}
+            onClose={() => setPicking(false)}
+          />
+        )}
         <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
           {options.exportDir.trim() ? (
             <>

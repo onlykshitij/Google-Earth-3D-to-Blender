@@ -14,6 +14,7 @@ is thread-safe by design.
 from __future__ import annotations
 
 import json
+import os
 import queue
 import threading
 import time
@@ -67,10 +68,89 @@ def _post(url, payload):
     return json.loads(body) if body else {}
 
 
+MAX_BROWSE_ENTRIES = 400
+
+
+def _roots():
+    """Sensible starting points for browsing this machine."""
+    places = []
+    home = os.path.expanduser("~")
+
+    if os.name == "nt":
+        for letter in "CDEFGHIJKLMNOPQRSTUVWXYZAB":
+            drive = "%s:%s" % (letter, os.sep)
+            if os.path.isdir(drive):
+                places.append({"name": drive, "path": drive})
+    else:
+        places.append({"name": "/", "path": "/"})
+
+    if os.path.isdir(home):
+        places.insert(0, {"name": "Home", "path": home})
+    return places
+
+
+def browse(path):
+    """
+    List the folders inside `path`, for the interface's folder picker.
+
+    Answered on this thread rather than Blender's, because reading a directory
+    needs no `bpy` - which is what keeps the round trip quick. Only directories
+    are returned, since the thing being chosen is a directory.
+    """
+    try:
+        # No starting point given, so open somewhere useful.
+        if not path:
+            path = os.path.expanduser("~")
+
+        target = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isdir(target):
+            return {"error": "%s is not a folder on this machine." % target}
+
+        entries = []
+        with os.scandir(target) as it:
+            for item in it:
+                if len(entries) >= MAX_BROWSE_ENTRIES:
+                    break
+                try:
+                    if not item.is_dir(follow_symlinks=False):
+                        continue
+                except OSError:
+                    continue
+                if item.name.startswith("."):
+                    continue
+                entries.append({"name": item.name, "path": item.path})
+
+        entries.sort(key=lambda e: e["name"].lower())
+
+        parent = os.path.dirname(target.rstrip(os.sep))
+        if parent == target or not os.path.isdir(parent):
+            parent = None
+
+        return {"path": target, "parent": parent, "entries": entries,
+                "roots": _roots(), "sep": os.sep,
+                "writable": os.access(target, os.W_OK)}
+    except PermissionError:
+        return {"error": "No permission to read that folder."}
+    except OSError as exc:
+        return {"error": str(exc)}
+
+
+def _handle_request(item):
+    """Answer one request from the hub. Never raises."""
+    try:
+        if item.get("type") == "browse":
+            return browse(item.get("path") or "")
+        return {"error": "Unknown request type"}
+    except Exception as exc:                            # noqa: BLE001
+        return {"error": str(exc)}
+
+
 def _loop(base_url, agent_token):
     poll_url = base_url.rstrip("/") + "/api/agent/poll"
     interval = hub_module.AGENT_POLL_SECONDS
     backoff = 1.0
+
+    pending_results = {}
 
     while not _stop.is_set():
         payload = {
@@ -78,6 +158,8 @@ def _loop(base_url, agent_token):
             "info": dict(INFO),
             "state": jobs.MANAGER.snapshot(),
         }
+        if pending_results:
+            payload["results"] = pending_results
         if agent_token:
             payload["agentToken"] = agent_token
 
@@ -98,11 +180,23 @@ def _loop(base_url, agent_token):
         _state["error"] = ""
         _state["last_contact"] = time.time()
 
+        pending_results = {}
+
         for command in reply.get("commands") or []:
             COMMANDS.put(command)
 
+        # Requests are answered here and now - they need no `bpy` - and sent
+        # back on the very next poll rather than after another wait.
+        requests = reply.get("requests") or []
+        for item in requests:
+            request_id = item.get("id")
+            if request_id:
+                pending_results[request_id] = _handle_request(item)
+
         interval = float(reply.get("pollSeconds") or interval)
-        if _stop.wait(max(0.25, interval)):
+        if pending_results:
+            continue
+        if _stop.wait(max(0.05, interval)):
             break
 
 

@@ -4,6 +4,7 @@ import { BASEMAPS, MapCanvas, type BasemapKey } from "./components/MapCanvas";
 import { SearchBox } from "./components/SearchBox";
 import { Sidebar } from "./components/Sidebar";
 import { InstancePicker } from "./components/InstancePicker";
+import { VersionChip } from "./components/VersionChip";
 import * as api from "./api";
 import type { Bbox, ExportOptions, Instance, Session } from "./types";
 import { TERMINAL_PHASES } from "./types";
@@ -187,6 +188,7 @@ export default function App() {
                 onSelect={setSelectedId}
                 connected={connected}
               />
+              <VersionChip version={session?.version ?? ""} />
             </div>
 
             <SearchBox
@@ -256,6 +258,7 @@ export default function App() {
         </div>
 
         <Sidebar
+          token={session?.token ?? ""}
           instance={selected}
           onlineCount={onlineCount}
           hubConnected={connected}

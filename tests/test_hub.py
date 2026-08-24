@@ -67,12 +67,12 @@ def get(path, expect=200):
             return e.code, {"raw": raw}
 
 
-def post(path, payload):
+def post(path, payload, timeout=12):
     req = urllib.request.Request(
         BASE + path, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=6) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
         raw = e.read().decode()
@@ -232,6 +232,89 @@ try:
               status == 409, body.get("error"))
     finally:
         hub.INSTANCE_TIMEOUT_SECONDS = original
+
+    # --- browsing, which is a round trip over a one-way transport ---------
+    print("")
+    print("--- folder browsing ---")
+
+    import threading
+
+    stop_agent = threading.Event()
+    seen_paths = []
+
+    def fake_agent():
+        """Stand in for Blender: poll, and answer any browse request."""
+        results = {}
+        while not stop_agent.is_set():
+            body = {"id": "ccc", "info": {"blendFile": "browsing.blend"},
+                    "state": {"busy": False, "job": None}}
+            if results:
+                body["results"] = results
+                results = {}
+            _status, reply = post("/api/agent/poll", body)
+            for item in reply.get("requests") or []:
+                seen_paths.append(item.get("path"))
+                results[item["id"]] = {
+                    "path": item.get("path") or "/root",
+                    "parent": None,
+                    "entries": [{"name": "refs", "path": "/root/refs"}],
+                    "roots": [{"name": "Home", "path": "/root"}],
+                    "sep": "/",
+                    "writable": True,
+                }
+            if results:
+                continue
+            stop_agent.wait(float(reply.get("pollSeconds") or 1.5))
+
+    thread = threading.Thread(target=fake_agent, daemon=True)
+    thread.start()
+    time.sleep(0.5)
+
+    started = time.time()
+    status, body = post("/api/browse", {"token": token, "instanceId": "ccc",
+                                        "path": "/root"})
+    elapsed = time.time() - started
+    check("browse reaches the instance and comes back",
+          status == 200 and body.get("entries") == [
+              {"name": "refs", "path": "/root/refs"}], body)
+    check("the request carried the path asked for", seen_paths[:1] == ["/root"],
+          seen_paths[:1])
+    check("round trip is quick enough to feel interactive", elapsed < 4.0,
+          "%.2fs" % elapsed)
+
+    status, body = post("/api/browse", {"instanceId": "ccc", "path": "/root"})
+    check("browse without a token is refused", status == 403)
+
+    status, body = post("/api/browse", {"token": token, "instanceId": "gone",
+                                        "path": "/root"})
+    check("browse at an unknown instance is refused", status == 409,
+          body.get("error"))
+
+    stop_agent.set()
+    thread.join(timeout=3)
+    post("/api/agent/leave", {"id": "ccc"})
+
+    # A request nobody answers must give up rather than hang for ever.
+    agent_poll("ddd", {"blendFile": "silent.blend"})
+    original_timeout = hub.REQUEST_TIMEOUT_SECONDS
+    hub.REQUEST_TIMEOUT_SECONDS = 1.0
+    try:
+        started = time.time()
+        status, body = post("/api/browse", {"token": token, "instanceId": "ddd",
+                                            "path": "/root"})
+        waited = time.time() - started
+        check("an unanswered browse times out", status == 504, body.get("error"))
+        check("and gives up promptly", waited < 4.0, "%.2fs" % waited)
+    finally:
+        hub.REQUEST_TIMEOUT_SECONDS = original_timeout
+        post("/api/agent/leave", {"id": "ddd"})
+
+    # --- version ----------------------------------------------------------
+    print("")
+    print("--- version ---")
+    status, body = get("/api/hub")
+    check("the hub reports its version", bool(body.get("version")),
+          body.get("version"))
 
     # --- agent token ------------------------------------------------------
     print("\n--- agent token ---")

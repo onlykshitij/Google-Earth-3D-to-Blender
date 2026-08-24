@@ -47,12 +47,17 @@ count, how much tilt was removed, and where the files were written:
 
 ![Finished import](docs/images/04-import-finished.png)
 
+Choose where the files land by browsing the machine that runs Blender — which
+may not be the machine you have the page open on:
+
+![Choosing an export folder](docs/images/05-folder-picker.png)
+
 And the result in Blender. The red line is exactly `Z = 0`: the ground lies flat
 along it and the Baptistery stands upright.
 
-![Levelled result, elevation](docs/images/05-result-elevation.png)
+![Levelled result, elevation](docs/images/06-result-elevation.png)
 
-![Levelled result, perspective](docs/images/06-result-perspective.png)
+![Levelled result, perspective](docs/images/07-result-perspective.png)
 
 ---
 
@@ -324,7 +329,13 @@ page and in Blender's panel, so you know before you start modelling.
 
 By default downloads land in a temporary cache. Set an **Export folder** — in
 the page's Files card, or with the folder picker in Blender's **Files** panel —
-and each export gets its own dated subfolder there:
+and each export gets its own dated subfolder there.
+
+**Browse…** in the Files card opens a folder picker for the machine running the
+chosen Blender. A browser cannot open a native dialog for a filesystem it is not
+on, and with a container or a remote hub that filesystem may belong to another
+machine entirely, so the listing is fetched from the Blender side and navigated
+in the page. You can also just type or paste a path.
 
 ```
 <your folder>/43.72311_10.39412_20260824-142827/
@@ -343,6 +354,17 @@ A folder you chose yourself is never deleted, whatever the **Keep Downloads**
 preference says. When no export folder is set and that preference is off,
 textures are packed into the `.blend` before the cache is cleared so nothing
 breaks.
+
+### Staying up to date
+
+The running version sits in the top-left of the page, beside the instance
+picker. It checks GitHub for a newer release and, if there is one, turns into a
+link to it.
+
+That check is made by the browser rather than the hub, so a hub with no outbound
+access still works, and it fails silently — not knowing about an update is never
+worth an error. The answer is cached for six hours, well inside GitHub's
+unauthenticated rate limit.
 
 ### Several Blender windows at once
 
@@ -411,7 +433,7 @@ Two details worth knowing if you touch this:
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| Octant level | 20 | Detail. 20 is Google's finest in most cities; each step down roughly quarters the download. |
+| Octant level | 20 | Detail, capped at 20 — see below. Each step down roughly quarters the download. |
 | Level the ground | on | Fit the ground plane, rotate it flat, sit it at `Z = 0`. |
 | Ground cell | 4 m | Grid used to sample ground height. Larger is more robust on cluttered sites; smaller follows narrow streets. |
 | Unit scale | 1.0 | `1.0` makes one Blender unit one metre. |
@@ -424,6 +446,23 @@ Two details worth knowing if you touch this:
 | Join into one object | off | Merge tiles into a single mesh. |
 | Smooth shading | on | Google's meshes are dense enough that this reads better. |
 | Fit view clipping | on | Widen the viewport clip range if the model would be clipped. |
+
+### Why the detail slider stops at 20
+
+The exporter will walk to level 21, but it only ever keeps **the deepest two
+levels** it finds. Asking for 21 swaps that pair from `[20, 19]` to `[21, 20]`,
+and the level-19 parents it gives up carry more geometry than the level-21
+leaves add. Measured on two very different areas:
+
+| Area | Level 20 | Level 21 |
+| --- | --- | --- |
+| Piazza dei Miracoli, Pisa | 8 octants, **27,808** verts | 16 octants, **19,221** verts |
+| Times Square, New York | 17 octants, **37,365** verts | 31 octants, **32,468** verts |
+
+Both times, level 21 downloaded about twice as many octants and returned *fewer*
+vertices. So 20 is the ceiling here, and reaching it counts as full detail: a
+report only calls the coverage thin when Google could not reach 20, never
+because you did not ask for 21.
 
 A note on **Trim below ground**: a face is only dropped when *all* of its
 vertices are below the cut — geometry is never split — so skirt faces straddling

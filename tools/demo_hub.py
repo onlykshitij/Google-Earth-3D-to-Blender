@@ -127,12 +127,66 @@ FINISHED = {
 }
 
 
+def listing(path):
+    """A real folder listing, so the folder picker actually works here."""
+    home = os.path.expanduser("~")
+    roots = [{"name": "Home", "path": home}]
+    if os.name == "nt":
+        roots += [{"name": "%s:%s" % (d, os.sep), "path": "%s:%s" % (d, os.sep)}
+                  for d in "CDEFG" if os.path.isdir("%s:%s" % (d, os.sep))]
+    else:
+        roots.append({"name": "/", "path": "/"})
+
+    # No starting point given, so open somewhere useful.
+    if not path:
+        path = os.path.expanduser("~")
+
+    target = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isdir(target):
+        return {"error": "%s is not a folder on this machine." % target}
+
+    entries = []
+    try:
+        with os.scandir(target) as it:
+            for item in it:
+                if len(entries) >= 400:
+                    break
+                try:
+                    if item.is_dir(follow_symlinks=False) and not item.name.startswith("."):
+                        entries.append({"name": item.name, "path": item.path})
+                except OSError:
+                    continue
+    except OSError as exc:
+        return {"error": str(exc)}
+
+    entries.sort(key=lambda e: e["name"].lower())
+    parent = os.path.dirname(target.rstrip(os.sep))
+    return {"path": target,
+            "parent": parent if parent != target and os.path.isdir(parent) else None,
+            "entries": entries, "roots": roots, "sep": os.sep,
+            "writable": os.access(target, os.W_OK)}
+
+
 def keep_alive(registry, stop):
-    """Re-register the stand-ins so they never age out of the list."""
+    """
+    Stand in for the agents: keep them registered and answer their requests.
+
+    This is the same exchange a real Blender has with the hub, just in-process,
+    which is what lets the folder picker work against this demo.
+    """
     while not stop.is_set():
         for entry in (IDLE, FINISHED):
-            registry.poll(entry["id"], entry["info"], entry["state"])
-        stop.wait(1.0)
+            _commands, requests = registry.poll(entry["id"], entry["info"],
+                                                entry["state"])
+            results = {}
+            for item in requests:
+                if item.get("type") == "browse":
+                    results[item["id"]] = listing(item.get("path") or "")
+                else:
+                    results[item["id"]] = {"error": "Unknown request type"}
+            if results:
+                registry.resolve(entry["id"], results)
+        stop.wait(0.15)
 
 
 def main():

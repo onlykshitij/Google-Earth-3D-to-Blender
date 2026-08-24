@@ -6,6 +6,9 @@ from bpy.props import (BoolProperty, FloatProperty, IntProperty,
                        StringProperty)
 from bpy.types import PropertyGroup
 
+# See PRACTICAL_MAX_LEVEL in obj_transform for why 20 and not 21.
+MAX_USEFUL_LEVEL = 20
+
 
 class GMEB_Properties(PropertyGroup):
     # --- selected area -----------------------------------------------------
@@ -29,9 +32,9 @@ class GMEB_Properties(PropertyGroup):
     # --- export options ----------------------------------------------------
     level: IntProperty(
         name="Detail",
-        description="Maximum octant depth. 20 is Google's finest level for most "
-                    "cities; each step down roughly quarters the download",
-        default=20, min=14, max=21,
+        description="Maximum octant depth. 20 is as fine as this usefully goes; "
+                    "each step down roughly quarters the download",
+        default=20, min=14, max=MAX_USEFUL_LEVEL,
     )
 
     # --- orientation and placement -----------------------------------------

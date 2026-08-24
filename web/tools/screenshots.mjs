@@ -92,6 +92,16 @@ async function main() {
   await sleep(1800);
   await shot("04-import-finished");
 
+  // --- 5. picking an export folder on the Blender machine ------------------
+  const files = page.locator("button", { hasText: "Browse" }).first();
+  await files.scrollIntoViewIfNeeded();
+  await files.click();
+  await page.waitForSelector("text=Choose an export folder", { timeout: 8000 });
+  await sleep(1600);
+  await shot("05-folder-picker");
+  await page.keyboard.press("Escape");
+  await sleep(400);
+
   await browser.close();
   console.log("done");
 }

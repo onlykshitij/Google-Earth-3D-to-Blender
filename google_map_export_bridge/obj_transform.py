@@ -98,6 +98,20 @@ class ObjTransformResult:
 #            per square metre; a coarse terrain sheet is orders of magnitude
 #            below that.
 
+# The exporter will walk to level 21, but only ever keeps the deepest two
+# levels it finds. Asking for 21 therefore swaps the pair from [20, 19] to
+# [21, 20], and measurements on two very different areas showed that trading
+# away the level-19 parents costs more geometry than the level-21 leaves add:
+#
+#   Pisa           level 20:  8 octants, 27,808 verts
+#                  level 21: 16 octants, 19,221 verts
+#   Times Square   level 20: 17 octants, 37,365 verts
+#                  level 21: 31 octants, 32,468 verts
+#
+# So 20 is treated as the practical ceiling: reaching it is full detail, and
+# not reaching it is what counts as a shortfall.
+PRACTICAL_MAX_LEVEL = 20
+
 # Below this, there is nothing standing up out of the ground.
 FLAT_RELIEF_M = 4.0
 # Below this, the mesh is too coarse to be building-level detail.
@@ -114,8 +128,11 @@ def assess_coverage(relief_m, density, requested_level, achieved_level=None):
     The note is written for the person who asked for the export.
     """
     shortfall = None
-    if achieved_level and requested_level and achieved_level < requested_level:
-        shortfall = requested_level - achieved_level
+    if achieved_level and requested_level:
+        wanted = min(requested_level, PRACTICAL_MAX_LEVEL)
+        if achieved_level < wanted:
+            shortfall = wanted - achieved_level
+            requested_level = wanted
 
     if relief_m < FLAT_RELIEF_M and density < SPARSE_DENSITY:
         note = ("This looks like Google's 2D fallback: draped imagery over flat "

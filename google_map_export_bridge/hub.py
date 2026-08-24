@@ -32,10 +32,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
+# Kept in step with bl_info in __init__.py; build.py fails if they drift.
+VERSION = "1.0.0"
+
 DEFAULT_PORT = 8777
 
 # An instance is considered gone if it misses several polls in a row.
 AGENT_POLL_SECONDS = 1.5
+# While a browser is waiting on an answer from Blender, the agent is asked to
+# poll far more often, so a request/response round trip feels immediate rather
+# than taking a whole poll cycle.
+AGENT_POLL_BUSY_SECONDS = 0.2
+EXPEDITE_WINDOW_SECONDS = 12.0
+REQUEST_TIMEOUT_SECONDS = 6.0
 INSTANCE_TIMEOUT_SECONDS = 8.0
 
 MAX_BODY_BYTES = 256 * 1024
@@ -62,6 +71,10 @@ class Instance:
         self.first_seen = time.time()
         self.last_seen = self.first_seen
         self.commands = deque()
+        # Requests wait for an answer, unlike commands which are fire-and-forget.
+        self.requests = deque()
+        self.waiters = {}
+        self.expedite_until = 0.0
 
     def as_dict(self, now=None):
         now = now or time.time()
@@ -83,6 +96,68 @@ class Registry:
         self._lock = threading.RLock()
         self._instances = {}
 
+    def request(self, instance_id, payload, timeout=None):
+        """
+        Ask an instance something and wait for its answer.
+
+        The transport only runs one way - Blender polls us - so a round trip is
+        built by queueing the question, letting the next poll collect it, and
+        blocking this request thread until that instance polls back with the
+        answer. The instance is asked to poll quickly while anyone is waiting.
+
+        Returns the answer, or None on timeout.
+        """
+        # Read at call time, not bound as a default, so the value stays
+        # adjustable - which tests rely on and deployments may want.
+        if timeout is None:
+            timeout = REQUEST_TIMEOUT_SECONDS
+
+        event = threading.Event()
+        request_id = secrets.token_hex(8)
+        entry = {"id": request_id, "event": event, "result": None}
+
+        with self._lock:
+            inst = self._instances.get(instance_id)
+            if inst is None:
+                return None
+            item = dict(payload)
+            item["id"] = request_id
+            inst.requests.append(item)
+            inst.waiters[request_id] = entry
+            inst.expedite_until = time.time() + EXPEDITE_WINDOW_SECONDS
+
+        if not event.wait(timeout):
+            with self._lock:
+                inst = self._instances.get(instance_id)
+                if inst is not None:
+                    inst.waiters.pop(request_id, None)
+            return None
+        return entry["result"]
+
+    def resolve(self, instance_id, results):
+        """Hand answers from a poll back to whoever is waiting for them."""
+        if not results:
+            return
+        with self._lock:
+            inst = self._instances.get(instance_id)
+            if inst is None:
+                return
+            for request_id, value in results.items():
+                entry = inst.waiters.pop(request_id, None)
+                if entry is not None:
+                    entry["result"] = value
+                    entry["event"].set()
+
+    def poll_interval(self, instance_id):
+        with self._lock:
+            inst = self._instances.get(instance_id)
+            if inst is None:
+                return AGENT_POLL_SECONDS
+            waiting = bool(inst.waiters) or bool(inst.requests)
+            if waiting or time.time() < inst.expedite_until:
+                return AGENT_POLL_BUSY_SECONDS
+            return AGENT_POLL_SECONDS
+
     def poll(self, instance_id, info, state):
         """Register or refresh an instance; return and clear its commands."""
         with self._lock:
@@ -98,8 +173,10 @@ class Registry:
 
             commands = list(inst.commands)
             inst.commands.clear()
+            requests = list(inst.requests)
+            inst.requests.clear()
             self._expire()
-            return commands
+            return commands, requests
 
     def push(self, instance_id, command):
         with self._lock:
@@ -157,6 +234,7 @@ class Hub:
         return {
             "service": SERVICE_NAME,
             "protocol": PROTOCOL_VERSION,
+            "version": VERSION,
             "instances": self.registry.count_online(),
             "uptime": round(time.time() - self.started_at, 1),
         }
@@ -339,13 +417,20 @@ class _Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict) or not payload.get("id"):
                 self._json({"error": "Missing instance id"}, 400)
                 return
-            commands = self.hub.registry.poll(
-                str(payload["id"]),
+            instance_id = str(payload["id"])
+            # Answers first, so a waiting browser is released before anything
+            # else this poll might do.
+            self.hub.registry.resolve(instance_id, payload.get("results") or {})
+            commands, requests = self.hub.registry.poll(
+                instance_id,
                 payload.get("info") or {},
                 payload.get("state"),
             )
-            self._json({"commands": commands,
-                        "pollSeconds": AGENT_POLL_SECONDS})
+            self._json({
+                "commands": commands,
+                "requests": requests,
+                "pollSeconds": self.hub.registry.poll_interval(instance_id),
+            })
             return
 
         if path == "/api/agent/leave":
@@ -384,6 +469,28 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json({"error": "Could not queue the export."}, 409)
                 return
             self._json({"accepted": True, "instanceId": target})
+            return
+
+        if path == "/api/browse":
+            if not self._web_token_ok(payload):
+                return
+            target, problem = self.hub.resolve_instance(
+                (payload or {}).get("instanceId"))
+            if problem:
+                self._json({"error": problem}, 409)
+                return
+
+            answer = self.hub.registry.request(
+                target, {"type": "browse",
+                         "path": str((payload or {}).get("path") or "")})
+            if answer is None:
+                self._json({"error": "That Blender did not answer in time."},
+                           504)
+                return
+            if answer.get("error"):
+                self._json(answer, 400)
+                return
+            self._json(answer)
             return
 
         if path == "/api/cancel":

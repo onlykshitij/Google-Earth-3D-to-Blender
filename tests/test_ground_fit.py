@@ -252,6 +252,17 @@ check("flat verdict explains itself",
 _verdict, _note = obj_transform.assess_coverage(25.0, 6.0, 20, 17)
 check("shortfall names both levels", "17" in _note and "20" in _note, _note)
 
+# Level 21 is reachable but measured worse than 20 on every area tried, so 20
+# counts as full detail. Asking for 21 and getting 20 is not a shortfall.
+coverage("asked 21, got 20 - not a shortfall", 25.0, 6.0, "3d",
+         requested=21, achieved=20)
+coverage("asked 21, got 18 - still a shortfall", 25.0, 6.0, "sparse",
+         requested=21, achieved=18)
+
+_verdict, _note = obj_transform.assess_coverage(25.0, 6.0, 21, 18)
+check("a shortfall past 21 is measured against 20",
+      "18" in _note and "20" in _note and "21" not in _note, _note)
+
 
 print("\n" + "=" * 62)
 if FAILURES:

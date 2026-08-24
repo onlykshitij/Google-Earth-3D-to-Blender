@@ -102,9 +102,21 @@ export type Instance = {
   connectedFor: number;
 };
 
+/** One folder listing, produced by the agent on the Blender machine. */
+export type Listing = {
+  path: string;
+  parent: string | null;
+  entries: { name: string; path: string }[];
+  roots: { name: string; path: string }[];
+  sep: string;
+  writable?: boolean;
+  error?: string;
+};
+
 export type Session = {
   service: string;
   protocol: number;
+  version: string;
   token: string;
   uptime: number;
   instances: Instance[];
