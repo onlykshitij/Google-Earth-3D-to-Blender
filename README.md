@@ -125,83 +125,6 @@ to be running — the add-on serves it itself.
 
 ---
 
-## Using it
-
-Areas are always selected visually:
-
-1. Get to the place. The search field takes any of three things:
-   - a place name, geocoded through Nominatim,
-   - coordinates — `43.7231, 10.3963` or `43°43'23.2"N 10°23'46.7"E`,
-   - a **Google Maps link**, pasted straight from the address bar.
-2. Press **Draw area** and drag a rectangle — or **Use view** to take what is on
-   screen.
-3. Check the estimate. The panel shows the ground size and how many points the
-   exporter will probe, which is what download time actually tracks.
-4. Press **Export to …**.
-
-Progress runs both in the page and in Blender's own panel: downloading →
-georeferencing → importing. The model lands in its own collection, locked so you
-cannot nudge it while modelling against it.
-
-> Shortened Maps links (`maps.app.goo.gl/…`) carry no coordinates — they only
-> appear after a redirect the browser cannot follow. Open the link in Google Maps
-> and copy the full URL instead.
-
-### When Google has no 3D data
-
-Google only has photogrammetry for part of the world. Elsewhere Earth falls back
-to satellite imagery draped over coarse terrain, and the exporter returns that
-quite happily — it imports without error, but it is a textured sheet with no
-buildings on it.
-
-Nothing in the data announces which kind you got, so it is inferred from three
-measurements and reported plainly:
-
-- **relief** — how far the tallest geometry rises above the fitted ground,
-- **density** — vertices per square metre (level-20 photogrammetry runs to
-  several; a terrain sheet is orders of magnitude below),
-- **achieved level** — the deepest octant level Google actually had, which is
-  often lower than the one you asked for.
-
-You get either *No 3D coverage* ("draped imagery over flat terrain, with no
-buildings") or *Thin coverage* with the numbers behind it. Both appear in the
-page and in Blender's panel, so you know before you start modelling.
-
-### Where the files go
-
-By default downloads land in a temporary cache. Set an **Export folder** — in
-the page's Files card, or with the folder picker in Blender's **Files** panel —
-and each export gets its own dated subfolder there:
-
-```
-<your folder>/43.72311_10.39412_20260824-142827/
-    model.obj             raw download, earth-centred metres
-    model_blender.obj     the georeferenced file that gets imported
-    model.mtl
-    tex_*.bmp
-```
-
-Everything for one area sits together in one flat folder, so the imported
-materials point at textures you can move, archive or version alongside the
-`.blend`. The exporter's own `downloaded_files/obj/<timestamp>/` scaffolding is
-cleared away afterwards.
-
-A folder you chose yourself is never deleted, whatever the **Keep Downloads**
-preference says. When no export folder is set and that preference is off,
-textures are packed into the `.blend` before the cache is cleared so nothing
-breaks.
-
-### Several Blender windows at once
-
-Every Blender running the add-on registers with one hub, so the page lists them
-all and the header becomes a picker. The export goes to the one you select,
-identified by its `.blend` name, scene, version and PID.
-
-No setup is needed: the first Blender to start hosts the hub, the rest detect it
-and join. If the hosting one is closed, another takes over within a few seconds.
-
----
-
 ## Deployment
 
 Three ways to run the interface. They differ only in *where the hub lives* — the
@@ -219,14 +142,32 @@ for you. Best for a single workstation.
 python run.py
 ```
 
-That is the whole thing: no dependencies beyond the standard library, no Blender
-needed to start it. It prints a localhost URL, opens your browser, and waits for
-Blender to check in.
+No dependencies beyond the standard library, and no Blender needed to start it.
+It prints a localhost URL, opens your browser, and waits for Blender to check in.
+
+The interface it serves is a build artefact, so it is **not** in the repository.
+`run.py` finds one on its own:
+
+1. a local build, if you have run `python build.py` or `cd web && npm run build`;
+2. otherwise the copy inside an **installed add-on** — the release zip ships one
+   already built, so if you installed the add-on in Blender you are done.
+
+So on a machine where the add-on is installed, `python run.py` works straight
+from a fresh clone. If neither is available it says so and offers the choices
+rather than failing obscurely. To build it in place — the only step that wants
+npm, and only once:
+
+```bash
+python run.py --build
+```
+
+Other options:
 
 ```bash
 python run.py --port 9000            # a different port
 python run.py --no-browser           # do not open a browser
 python run.py --host 0.0.0.0         # reachable from other machines
+python run.py --web-dir <path>       # serve a specific copy
 python run.py --agent-token "$(openssl rand -hex 24)"
 ```
 
@@ -334,6 +275,83 @@ https://maps.example.com       behind a reverse proxy with TLS
 The scheme and port are filled in when you leave them off, and the preferences
 panel shows the address it resolved to. Leave the field empty to host the
 interface inside Blender instead, in which case the **Hub Port** setting applies.
+
+---
+
+## Using it
+
+Areas are always selected visually:
+
+1. Get to the place. The search field takes any of three things:
+   - a place name, geocoded through Nominatim,
+   - coordinates — `43.7231, 10.3963` or `43°43'23.2"N 10°23'46.7"E`,
+   - a **Google Maps link**, pasted straight from the address bar.
+2. Press **Draw area** and drag a rectangle — or **Use view** to take what is on
+   screen.
+3. Check the estimate. The panel shows the ground size and how many points the
+   exporter will probe, which is what download time actually tracks.
+4. Press **Export to …**.
+
+Progress runs both in the page and in Blender's own panel: downloading →
+georeferencing → importing. The model lands in its own collection, locked so you
+cannot nudge it while modelling against it.
+
+> Shortened Maps links (`maps.app.goo.gl/…`) carry no coordinates — they only
+> appear after a redirect the browser cannot follow. Open the link in Google Maps
+> and copy the full URL instead.
+
+### When Google has no 3D data
+
+Google only has photogrammetry for part of the world. Elsewhere Earth falls back
+to satellite imagery draped over coarse terrain, and the exporter returns that
+quite happily — it imports without error, but it is a textured sheet with no
+buildings on it.
+
+Nothing in the data announces which kind you got, so it is inferred from three
+measurements and reported plainly:
+
+- **relief** — how far the tallest geometry rises above the fitted ground,
+- **density** — vertices per square metre (level-20 photogrammetry runs to
+  several; a terrain sheet is orders of magnitude below),
+- **achieved level** — the deepest octant level Google actually had, which is
+  often lower than the one you asked for.
+
+You get either *No 3D coverage* ("draped imagery over flat terrain, with no
+buildings") or *Thin coverage* with the numbers behind it. Both appear in the
+page and in Blender's panel, so you know before you start modelling.
+
+### Where the files go
+
+By default downloads land in a temporary cache. Set an **Export folder** — in
+the page's Files card, or with the folder picker in Blender's **Files** panel —
+and each export gets its own dated subfolder there:
+
+```
+<your folder>/43.72311_10.39412_20260824-142827/
+    model.obj             raw download, earth-centred metres
+    model_blender.obj     the georeferenced file that gets imported
+    model.mtl
+    tex_*.bmp
+```
+
+Everything for one area sits together in one flat folder, so the imported
+materials point at textures you can move, archive or version alongside the
+`.blend`. The exporter's own `downloaded_files/obj/<timestamp>/` scaffolding is
+cleared away afterwards.
+
+A folder you chose yourself is never deleted, whatever the **Keep Downloads**
+preference says. When no export folder is set and that preference is off,
+textures are packed into the `.blend` before the cache is cleared so nothing
+breaks.
+
+### Several Blender windows at once
+
+Every Blender running the add-on registers with one hub, so the page lists them
+all and the header becomes a picker. The export goes to the one you select,
+identified by its `.blend` name, scene, version and PID.
+
+No setup is needed: the first Blender to start hosts the hub, the rest detect it
+and join. If the hosting one is closed, another takes over within a few seconds.
 
 ---
 
