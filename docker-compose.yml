@@ -6,6 +6,12 @@
 #   docker compose up -d        -> http://127.0.0.1:8777
 #   docker compose pull         -> update to the latest published image
 #
+# "port is already allocated" almost always means a Blender with the add-on
+# enabled is already hosting the interface on 8777 itself. Either use that one,
+# or set the add-on's Hub URL so it stops hosting, or run this beside it:
+#
+#   GMEB_HOST_PORT=8778 docker compose up -d
+#
 # To build from this checkout instead, uncomment `build: .` below and run
 # `docker compose up -d --build`.
 
@@ -17,15 +23,15 @@ services:
     restart: unless-stopped
     ports:
       # Published on loopback only, so the interface is reachable from this
-      # machine and nowhere else. Use "8777:8777" to expose it on your network,
-      # and set GMEB_AGENT_TOKEN below if you do.
-      - "127.0.0.1:8777:8777"
+      # machine and nowhere else. Set GMEB_BIND=0.0.0.0 to expose it on your
+      # network, and set GMEB_AGENT_TOKEN below if you do.
+      - "${GMEB_BIND:-127.0.0.1}:${GMEB_HOST_PORT:-8777}:8777"
     environment:
       GMEB_HOST: "0.0.0.0"
       GMEB_PORT: "8777"
       GMEB_NO_BROWSER: "1"
       # The address Blender should be pointed at. Must match the published port.
-      GMEB_PUBLIC_URL: "${GMEB_PUBLIC_URL:-http://127.0.0.1:8777}"
+      GMEB_PUBLIC_URL: "${GMEB_PUBLIC_URL:-http://127.0.0.1:${GMEB_HOST_PORT:-8777}}"
       # Shared secret Blender must present. Leave empty for local use; set it to
       # something long if you expose the port beyond this machine.
       GMEB_AGENT_TOKEN: "${GMEB_AGENT_TOKEN:-}"
