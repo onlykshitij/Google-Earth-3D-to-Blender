@@ -9,7 +9,7 @@ import bpy
 from bpy.props import BoolProperty, StringProperty
 from bpy.types import Operator
 
-from . import agent, connect, jobs, launch
+from . import agent, connect, jobs, launch, updates
 
 
 class GMEB_OT_connect(Operator):
@@ -124,28 +124,67 @@ class GMEB_OT_cancel(Operator):
         return {"FINISHED"}
 
 
-class GMEB_OT_pick_export_dir(Operator):
-    bl_idname = "gmeb.pick_export_dir"
-    bl_label = "Choose Export Folder"
-    bl_description = "Pick the folder exports are downloaded into and imported from"
-
-    # `directory` is what Blender fills in when the browser is opened in folder
-    # mode; `filter_folder` keeps files out of the listing.
-    directory: StringProperty(subtype="DIR_PATH", options={"HIDDEN"})
-    filter_folder: BoolProperty(default=True, options={"HIDDEN"})
-
-    def invoke(self, context, _event):
-        settings = getattr(context.scene, "gmeb", None)
-        if settings is not None and settings.export_dir:
-            self.directory = bpy.path.abspath(settings.export_dir)
-        context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
+class GMEB_OT_setup_updates(Operator):
+    bl_idname = "gmeb.setup_updates"
+    bl_label = "Enable Updates In Blender"
+    bl_description = ("Register this add-on's release feed with Blender, so "
+                      "updates appear under Preferences > Get Extensions like "
+                      "any other extension")
 
     def execute(self, context):
-        if not self.directory:
+        try:
+            _repo, created = updates.register_repo(context)
+        except RuntimeError as exc:
+            self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        context.scene.gmeb.export_dir = self.directory
-        self.report({"INFO"}, "Exports will go to %s" % self.directory)
+
+        # Fetch the index straight away, so the update shows without the user
+        # having to go and press anything else.
+        try:
+            bpy.ops.extensions.repo_sync_all()
+        except Exception as exc:                        # noqa: BLE001
+            self.report({"WARNING"},
+                        "Repository added, but the check failed: %s" % exc)
+            return {"FINISHED"}
+
+        self.report({"INFO"},
+                    "Update feed %s. Updates now show in Preferences > "
+                    "Get Extensions." % ("added" if created else "refreshed"))
+        return {"FINISHED"}
+
+
+class GMEB_OT_check_updates(Operator):
+    bl_idname = "gmeb.check_updates"
+    bl_label = "Check For Updates"
+    bl_description = "Ask GitHub whether a newer release exists"
+
+    def execute(self, context):
+        from . import hub, updates as up
+
+        # hub.VERSION is the version the interface reports, and build.py
+        # refuses to package when it disagrees with bl_info.
+        current = hub.VERSION
+        latest = up.latest_release()
+
+        if latest is None:
+            self.report({"WARNING"},
+                        "Could not reach GitHub to check for updates.")
+            return {"CANCELLED"}
+
+        if up.is_newer(latest, current):
+            self.report({"INFO"}, "Version %s is available; you have %s."
+                        % (latest, current))
+            # If the feed is registered, Blender can install it directly.
+            if up.find_repo(context) is not None:
+                try:
+                    bpy.ops.extensions.repo_sync_all()
+                    bpy.ops.extensions.userpref_show_for_update()
+                except Exception:                       # noqa: BLE001
+                    webbrowser.open(up.RELEASES_URL)
+            else:
+                webbrowser.open(up.RELEASES_URL)
+        else:
+            self.report({"INFO"}, "You are on the latest version (%s)." % current)
         return {"FINISHED"}
 
 
@@ -215,7 +254,8 @@ CLASSES = (
     GMEB_OT_copy_url,
     GMEB_OT_export,
     GMEB_OT_cancel,
-    GMEB_OT_pick_export_dir,
+    GMEB_OT_setup_updates,
+    GMEB_OT_check_updates,
     GMEB_OT_open_output,
     GMEB_OT_reimport,
 )

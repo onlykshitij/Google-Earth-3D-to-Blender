@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 DEFAULT_PORT = 8777
 
@@ -491,21 +491,6 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(answer, 400)
                 return
             self._json(answer)
-            return
-
-        if path == "/api/pick-folder":
-            if not self._web_token_ok(payload):
-                return
-            target, problem = self.hub.resolve_instance(
-                (payload or {}).get("instanceId"))
-            if problem:
-                self._json({"error": problem}, 409)
-                return
-            if not self.hub.registry.push(target, {"type": "pick_folder"}):
-                self._json({"error": "Could not ask Blender to open a dialog."},
-                           409)
-                return
-            self._json({"opened": True, "instanceId": target})
             return
 
         if path == "/api/retry":

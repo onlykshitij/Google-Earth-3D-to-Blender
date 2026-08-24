@@ -54,21 +54,13 @@ export function startExport(
 }
 
 /**
- * Ask that Blender to open its own folder dialog.
+ * List folders on the machine running the chosen Blender.
  *
- * A browser cannot open a native dialog for a filesystem it is not on, so the
- * dialog is opened where the folder actually lives. It returns as soon as the
- * request is queued; the chosen path arrives later, in the instance's reported
- * defaults.
+ * A browser's own folder picker deliberately withholds absolute paths - it
+ * yields a folder name and relative entries only - so it cannot say where a
+ * folder actually is. Listing from the Blender side is what makes an in-page
+ * browser able to produce a real path.
  */
-export function pickFolder(token: string, instanceId: string) {
-  return request<{ opened: boolean }>("api/pick-folder", {
-    method: "POST",
-    body: JSON.stringify({ token, instanceId }),
-  });
-}
-
-/** List folders on the Blender machine. Kept for hubs driving a remote Blender. */
 export function browse(token: string, instanceId: string, path: string) {
   return request<Listing>("api/browse", {
     method: "POST",

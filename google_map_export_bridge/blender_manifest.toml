@@ -3,7 +3,7 @@
 schema_version = "1.0.0"
 
 id = "google_map_export_bridge"
-version = "1.1.1"
+version = "1.1.2"
 name = "Google Map Export Bridge"
 tagline = "Import Google Earth 3D areas as levelled modelling references"
 maintainer = "Sentics"
@@ -11,7 +11,9 @@ type = "add-on"
 
 blender_version_min = "4.2.0"
 
-license = ["SPDX:MIT"]
+# The project is AGPL-3.0; the bundled exporter keeps its own MIT notice,
+# recorded in NOTICE.md.
+license = ["SPDX:AGPL-3.0-or-later"]
 
 [permissions]
 network = "Download map tiles, and serve the local map interface"

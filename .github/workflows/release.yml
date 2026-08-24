@@ -48,12 +48,21 @@ jobs:
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
           echo "Releasing $ZIP as $TAG"
 
+      # Blender tracks a remote repository through this index, which is how the
+      # add-on can be updated from inside Blender.
+      - name: Build the extension index
+        env:
+          RELEASE_TAG: ${{ steps.name.outputs.tag }}
+        run: python tools/make_index.py "${{ steps.name.outputs.zip }}"
+
       - name: Publish the release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.name.outputs.tag }}
           name: Google Map Export Bridge ${{ steps.name.outputs.tag }}
-          files: ${{ steps.name.outputs.zip }}
+          files: |
+            ${{ steps.name.outputs.zip }}
+            dist/index.json
           generate_release_notes: true
           body: |
             ## Install
@@ -67,6 +76,12 @@ jobs:
             5. Press **N** in the 3D viewport and open the **Map Export** tab.
 
             Requires Blender 4.2 or newer and [Node.js](https://nodejs.org) 18+.
+
+            ### Updating from inside Blender
+
+            In the add-on preferences press **Enable Updates In Blender** once.
+            Blender then tracks this repository's releases and offers updates
+            under **Preferences → Get Extensions**, like any other extension.
 
             The container image for this version is at
             `ghcr.io/${{ github.repository }}:${{ steps.name.outputs.tag }}`.

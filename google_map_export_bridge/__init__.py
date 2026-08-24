@@ -36,7 +36,7 @@ bl_info = {
     "description": "Import Google Earth 3D areas as oriented, levelled "
                    "modelling references",
     "author": "Sentics",
-    "version": (1, 1, 1),
+    "version": (1, 1, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Map Export",
     "category": "Import-Export",
@@ -64,15 +64,6 @@ def _handle_command(context, command):
             jobs.MANAGER.record_failure(bbox, error)
         else:
             print("[google-map-export-bridge] export %s started" % job.id)
-
-    elif kind == "pick_folder":
-        # Opens Blender's own file browser on that machine. It has to run from
-        # the main thread with a window, which is exactly where this timer is.
-        try:
-            bpy.ops.gmeb.pick_export_dir("INVOKE_DEFAULT")
-        except Exception as exc:                        # noqa: BLE001
-            print("[google-map-export-bridge] could not open the folder "
-                  "dialog: %s" % exc)
 
     elif kind == "retry":
         # Re-run the last export unchanged. Tiles are fetched again, which is

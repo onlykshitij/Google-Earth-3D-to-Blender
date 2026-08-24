@@ -172,6 +172,28 @@ class GMEB_Preferences(AddonPreferences):
         box.prop(self, "agent_token")
 
         box = layout.box()
+        box.label(text="Updates", icon="FILE_REFRESH")
+
+        from . import updates
+        repo = updates.find_repo(_context)
+
+        col = box.column(align=True)
+        col.scale_y = 0.85
+        if repo is None:
+            col.label(text="Blender is not tracking this add-on's releases.",
+                      icon="INFO")
+            col.label(text="Enable it once and updates arrive like any")
+            col.label(text="other extension.")
+        else:
+            col.label(text="Tracking releases as '%s'." % repo.name,
+                      icon="CHECKMARK")
+
+        row = box.row(align=True)
+        if repo is None:
+            row.operator("gmeb.setup_updates", icon="PLUGIN")
+        row.operator("gmeb.check_updates", icon="FILE_REFRESH")
+
+        box = layout.box()
         box.label(text="Tools", icon="TOOL_SETTINGS")
         box.prop(self, "node_path")
 

@@ -140,6 +140,22 @@ the bundled exporter; nothing else is needed.
 Press **Open Map** and the interface opens in your browser. Nothing else needs
 to be running — the add-on serves it itself.
 
+### Updating from inside Blender
+
+In the add-on preferences, press **Enable Updates In Blender** once. That
+registers this repository's release feed with Blender, and from then on updates
+appear under **Preferences → Get Extensions** exactly like any other extension —
+Blender checks, downloads, installs and handles the restart.
+
+There is deliberately no bespoke updater here. An add-on overwriting itself
+while running is a poor idea, and Blender 4.2 and newer already does this
+properly for any repository that publishes an index. Every release publishes one
+at a URL that always resolves to the newest version, so nothing has to be
+reconfigured later.
+
+**Check For Updates** next to it asks GitHub directly and tells you what it
+finds, whether or not the feed is registered.
+
 ---
 
 ## Deployment
@@ -394,11 +410,15 @@ By default downloads land in a temporary cache. Set an **Export folder** — in
 the page's Files card, or with the folder picker in Blender's **Files** panel —
 and each export gets its own dated subfolder there.
 
-**Browse…** in the Files card opens Blender's own folder dialog, on the machine
-running that Blender. A browser cannot open a native dialog for a filesystem it
-is not on, so the dialog is opened where the folder actually lives — switch to
-Blender, choose a folder, and the page picks up the choice on its own. You can
-also just type or paste a path.
+**Browse…** in the Files card opens a folder browser in the page, listing the
+folders on the machine running that Blender. You can also type or paste a path.
+
+It is worth saying why it is not the browser's own folder dialog. Browsers
+deliberately withhold absolute paths: `showDirectoryPicker()` hands back a
+folder *name*, and a directory `<input>` hands back paths relative to whatever
+was chosen. Neither can say that a folder is `D:efs`, which is exactly what
+the export needs. So the listing comes from the Blender side, where the path is
+known, and is navigated in the page.
 
 ```
 <your folder>/43.72311_10.39412_20260824-142827/
