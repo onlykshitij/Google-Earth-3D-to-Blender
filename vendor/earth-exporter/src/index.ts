@@ -134,6 +134,9 @@ async function bootstrap() {
     dropped: collected.size - octants.length,
   });
 
+  // Root octants cannot be handed to a parent - there is not one.
+  ObjWriter.rootPaths = new Set(octants);
+
   const modelOutDir = await app.run(octants, maxLevel);
   if (!modelOutDir) {
     throw new Error('Model out dir is undefined');

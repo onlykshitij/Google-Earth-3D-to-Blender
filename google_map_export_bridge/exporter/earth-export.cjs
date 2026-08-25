@@ -14303,6 +14303,11 @@ var ObjWriter = class _ObjWriter {
     this.textureCacheDir = "";
   }
   static {
+    // The octants the search started from. They have no parent in the export, so
+    // they can never be handed upwards however blank they are.
+    this.rootPaths = /* @__PURE__ */ new Set();
+  }
+  static {
     // A tile this black carries no imagery; anything less may just be night,
     // deep shade, or dark tarmac, which are all legitimate.
     this.BLACK_TILE_FRACTION = 0.95;
@@ -14374,9 +14379,13 @@ var ObjWriter = class _ObjWriter {
       }
       decodedMeshes.set(meshIndex, decoded);
     }
-    if (considered > 0 && usable === 0) {
+    const blankHere = considered - usable;
+    if (blankHere > 0 && !_ObjWriter.rootPaths.has(nodeName)) {
       this.skipped.add(nodeName);
-      console.error(`MRF_DIAG blank-texture ${nodeName} skipped, parent will cover it`);
+      _ObjWriter.tilesBlank += blankHere;
+      console.error(
+        `MRF_DIAG blank-texture ${nodeName} (${blankHere}/${considered} meshes) handed to its parent`
+      );
       return;
     }
     for (const [meshIndex, mesh] of Object.entries(node.meshes)) {
@@ -14389,6 +14398,9 @@ var ObjWriter = class _ObjWriter {
         decoded = null;
       }
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
+      if (!obj) {
+        continue;
+      }
       import_fs_extra.default.appendFileSync(import_path6.default.join(this.ctx.objDir, "model.obj"), obj);
       const material = decoded ? `
         newmtl ${texName}
@@ -14419,6 +14431,7 @@ var ObjWriter = class _ObjWriter {
       return Array.isArray(exclude) ? exclude.indexOf(w2) >= 0 : false;
     };
     let str = "";
+    let faceCount = 0;
     const indices = mesh.indices;
     const vertices = mesh.vertices;
     const normals = mesh.normals;
@@ -14433,8 +14446,8 @@ var ObjWriter = class _ObjWriter {
         str += s + "\n";
       }
     };
-    console2.log(`usemtl ${texName}`);
     console2.log(`o planet_${meshName}`);
+    console2.log(`usemtl ${texName}`);
     console2.log("# vertices");
     for (let i = 0; i < vertices.length; i += 8) {
       let x = vertices[i + 0];
@@ -14533,7 +14546,11 @@ var ObjWriter = class _ObjWriter {
         } else {
           console2.log(`f ${a2 + _c_v} ${b2 + _c_v} ${c2 + _c_v}`);
         }
+        faceCount++;
       }
+    }
+    if (faceCount === 0) {
+      return "";
     }
     this.ctx.c_v = c_v;
     this.ctx.c_u = c_u;
@@ -14829,6 +14846,7 @@ async function bootstrap() {
     levels: levels.slice(0, 2),
     dropped: collected.size - octants.length
   });
+  ObjWriter.rootPaths = new Set(octants);
   const modelOutDir = await app.run(octants, maxLevel);
   if (!modelOutDir) {
     throw new Error("Model out dir is undefined");

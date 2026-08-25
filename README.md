@@ -380,6 +380,21 @@ the duplicates.
 and running the export again on 1.1.1 is quicker than trying to deduplicate in
 place.
 
+### Every object wears its own texture
+
+`usemtl` used to be written before `o`, which puts the material declaration
+inside the *previous* object's block. Objects therefore ended up with two
+material slots - their own and their neighbour's - and some wore the wrong one
+outright. Where the neighbour happened to be a tile with no imagery, a
+perfectly well textured block rendered flat grey, and re-exporting never helped
+because the download was fine every time; only the pairing in the file was
+wrong.
+
+The object is now written first and its material immediately after, so each
+declares exactly one material: its own. On one area, 223 objects carrying a
+spurious second slot became 298 objects with none, and mismatched pairs went
+from present to zero.
+
 ### Tiles Google serves blank
 
 Some level-20 tiles come back with a texture that is deliberately black - the
@@ -392,12 +407,15 @@ Two things happen now:
 - If **every** mesh of a node is blank, the node is not written at all and its
   parent keeps the triangles it would have handed over. The parent's imagery is
   a level coarser, but it is real.
-- If only **some** meshes of a node are blank, the parent cannot help - it gave
-  this node the whole octant - so those get a neutral grey material. Grey reads
-  as "no imagery here"; black reads as a hole.
+- **Any** blank mesh now hands the whole node back, not just a node that is
+  entirely blank. The parent covers the same ground one level coarser, which is
+  a much better trade than leaving part of it flat grey.
+- Root octants are exempt: nothing above them was written, so handing one up
+  would leave a hole rather than a coarser patch. Those keep the neutral grey.
 
-Measured on one area: 52 black textures became **none**, with 6 nodes handed
-back to their parents and 8 meshes falling back to grey.
+Measured on one area: 52 black textures became **none**, and grey patches fell
+from 8 to 2 once any blank mesh could hand its node upwards. The 2 that remain
+are root octants, which have no parent to fall back on.
 
 **A re-run never trades a good texture for a blank one.** Whether a tile comes
 back with imagery is not always the same from one request to the next, so every

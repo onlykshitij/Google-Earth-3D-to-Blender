@@ -291,6 +291,36 @@ if job and job.phase == jobs.PHASE_DONE:
     tex_files = [os.path.join(tex_dir, f) for f in os.listdir(tex_dir)
                  if f.startswith("tex_") and f.endswith(".bmp")] if tex_dir else []
     black_files = [f for f in tex_files if _mostly_black(f)]
+    # Each object must wear its own material, and only its own. Writing
+    # `usemtl` before `o` put the declaration in the previous object's block,
+    # which gave everything a spurious second slot and made some objects wear
+    # a neighbour's texture - including, sometimes, a blank one.
+    stray = []
+    wrong = []
+    for obj in objs:
+        if len(obj.material_slots) > 1:
+            stray.append(obj.name)
+        if not obj.data.polygons:
+            continue
+        slot = obj.data.polygons[0].material_index
+        if slot >= len(obj.material_slots):
+            wrong.append((obj.name, "no such slot"))
+            continue
+        material = obj.material_slots[slot].material
+        if material is None:
+            wrong.append((obj.name, "no material"))
+            continue
+        # planet_<node>_<mesh> should wear tex_<node>_<mesh>.
+        want = obj.name.split(".")[0].replace("planet_", "tex_", 1)
+        got = material.name.split(".")[0]
+        if got != want:
+            wrong.append((obj.name, material.name))
+
+    check("no object carries a spare material slot", not stray,
+          "%d of %d" % (len(stray), len(objs)))
+    check("every object wears its own texture", not wrong,
+          wrong[:2] if wrong else "")
+
     check("no blank-black textures were written",
           not black_files, "%d of %d" % (len(black_files), len(tex_files)))
 

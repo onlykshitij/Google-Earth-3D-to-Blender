@@ -88,6 +88,10 @@ export class ObjWriter {
   // Where known-good textures are kept between runs.
   public static textureCacheDir = '';
 
+  // The octants the search started from. They have no parent in the export, so
+  // they can never be handed upwards however blank they are.
+  public static rootPaths = new Set<string>();
+
   // Guards against a node being written more than once. Two coincident
   // copies of a mesh z-fight, which looks like corruption rather than like
   // duplication, so it is worth refusing outright.
@@ -180,9 +184,18 @@ export class ObjWriter {
       decodedMeshes.set(meshIndex, decoded);
     }
 
-    if (considered > 0 && usable === 0) {
+    // Any blank mesh is enough to hand the whole node back. The parent covers
+    // the same ground one level coarser, which is a far better trade than
+    // leaving part of it flat grey. Root nodes are exempt: nothing above them
+    // was written, so skipping one would leave a hole instead.
+    const blankHere = considered - usable;
+    if (blankHere > 0 && !ObjWriter.rootPaths.has(nodeName)) {
       this.skipped.add(nodeName);
-      console.error(`MRF_DIAG blank-texture ${nodeName} skipped, parent will cover it`);
+      ObjWriter.tilesBlank += blankHere;
+      console.error(
+        `MRF_DIAG blank-texture ${nodeName} (${blankHere}/${considered} meshes) ` +
+          `handed to its parent`,
+      );
       return;
     }
 
@@ -205,6 +218,10 @@ export class ObjWriter {
       }
 
       const obj = this.writeMeshOBJ(meshName, texName, node, mesh, exclude);
+      if (!obj) {
+        // Every triangle went to a finer child; there is nothing to texture.
+        continue;
+      }
       fs.appendFileSync(path.join(this.ctx.objDir, 'model.obj'), obj);
 
       // A material is always written, so geometry is never orphaned. Without a
@@ -248,6 +265,7 @@ export class ObjWriter {
     };
 
     let str = '';
+    let faceCount = 0;
     const indices = mesh.indices;
     const vertices = mesh.vertices;
     const normals = mesh.normals;
@@ -266,8 +284,12 @@ export class ObjWriter {
       },
     };
 
-    console.log(`usemtl ${texName}`);
+    // The object first, then its material. Written the other way round the
+    // `usemtl` line falls inside the *previous* object's block, and every
+    // object ends up with a second, unused material slot carrying its
+    // neighbour's texture.
     console.log(`o planet_${meshName}`);
+    console.log(`usemtl ${texName}`);
 
     // Write vertices
     console.log('# vertices');
@@ -398,7 +420,18 @@ export class ObjWriter {
         } else {
           console.log(`f ${a + _c_v} ${b + _c_v} ${c + _c_v}`);
         }
+        faceCount++;
       }
+    }
+
+
+    // A mesh whose triangles all went to a finer child writes no faces.
+    // Declaring it anyway leaves an object Blender never creates, and its
+    // material then attaches to the next object that does have geometry as
+    // an unused extra slot. The counters are left alone so the indices of
+    // whatever follows stay correct.
+    if (faceCount === 0) {
+      return '';
     }
 
     this.ctx.c_v = c_v;
