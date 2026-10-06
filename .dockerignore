@@ -11,3 +11,4 @@ __pycache__/
 dist/
 build/
 google_map_export_bridge/web/
+.env

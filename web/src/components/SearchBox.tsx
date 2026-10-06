@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isShortMapsLink, parseLocation } from "../lib/geo";
+import { geocodeUrl } from "../lib/settings";
 
 export type Pick = {
   lat: number;
@@ -17,6 +18,8 @@ type Result = {
 
 type Props = {
   onPick: (r: Pick) => void;
+  /** Nominatim-compatible search template. Empty uses the public Nominatim. */
+  geocoderUrl: string;
 };
 
 /**
@@ -24,10 +27,10 @@ type Props = {
  * pair, or a Google Maps link.
  *
  * Coordinates and links are resolved locally and instantly, so pasting a link
- * never touches the geocoder. Only free text is sent to Nominatim, debounced
- * and one request at a time, since it is a shared public service.
+ * never touches the geocoder. Only free text is sent to the geocoder, debounced
+ * and one request at a time, since the default one is a shared public service.
  */
-export function SearchBox({ onPick }: Props) {
+export function SearchBox({ onPick, geocoderUrl }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,9 +55,7 @@ export function SearchBox({ onPick }: Props) {
     const timer = window.setTimeout(async () => {
       setBusy(true);
       try {
-        const url =
-          "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" +
-          encodeURIComponent(term);
+        const url = geocodeUrl(geocoderUrl, term);
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as Array<{
@@ -86,7 +87,7 @@ export function SearchBox({ onPick }: Props) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query, direct, shortLink]);
+  }, [query, direct, shortLink, geocoderUrl]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {

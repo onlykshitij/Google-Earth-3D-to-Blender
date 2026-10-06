@@ -205,6 +205,7 @@ python run.py --no-browser           # do not open a browser
 python run.py --host 0.0.0.0         # reachable from other machines
 python run.py --web-dir <path>       # serve a specific copy
 python run.py --agent-token "$(openssl rand -hex 24)"
+python run.py --carto-key YOUR_KEY   # CARTO's Dark and Light map layers
 ```
 
 Then in Blender: **Preferences → Add-ons → Google Map Export Bridge → Hub URL**,
@@ -257,6 +258,7 @@ Put the same value in each add-on's **Hub Token** preference, and set
 | `GMEB_PUBLIC_URL` | address Blender should use; must match the published port |
 | `GMEB_AGENT_TOKEN` | shared secret Blender must present |
 | `GMEB_NO_BROWSER` | `1` to not open a browser |
+| `GMEB_CARTO_KEY`, `GMEB_TILE_URL`, `GMEB_TILE_ATTRIBUTION`, `GMEB_GEOCODER_URL` | map keys and addresses, see [Map layers, search and keys](#map-layers-search-and-keys) |
 
 To build from this checkout instead of pulling, uncomment `build: .` in
 `docker-compose.yml` and run `docker compose up -d --build`.
@@ -312,6 +314,51 @@ The scheme and port are filled in when you leave them off, and the preferences
 panel shows the address it resolved to. Leave the field empty to host the
 interface inside Blender instead, in which case the **Hub Port** setting applies.
 
+### Map layers, search and keys
+
+The export itself needs no key: Blender downloads from Google Earth directly.
+Keys only matter for the map you draw on and the search box, which your browser
+fetches from third-party services:
+
+| Layer or feature | Service | Key |
+| --- | --- | --- |
+| Dark, Light | [CARTO basemaps](https://carto.com/basemaps/apikey) | required since September 2026, free up to 5 million tiles a month |
+| Dark without a CARTO key | OpenStreetMap, shaded dark in the browser | none |
+| Streets | OpenStreetMap | none |
+| Satellite | Esri World Imagery | none |
+| Custom | any XYZ tile address you give it | whatever that provider needs |
+| Search | Nominatim, or any compatible service | none for the public Nominatim |
+
+Without a CARTO key, CARTO still answers, but every tile reads
+*API KEY REQUIRED*. So with no key set, Dark uses OpenStreetMap's tiles shaded
+dark and Light is hidden. To get CARTO's own layers back, request a key at
+<https://carto.com/basemaps/apikey>. It needs only an email address, and CARTO
+mails a sign-in link to a dashboard where the key is shown and where you can
+restrict it to your hub's address.
+
+There are two places to put a key:
+
+- **In the page**, for one browser: the gear button next to the version opens
+  **Map settings**. Values saved there stay in that browser and win over the
+  hub's. **Reset** forgets them.
+- **On the hub**, for every browser that opens it: the `GMEB_*` variables below.
+  With Docker Compose, copy [`.env.example`](.env.example) to `.env` beside
+  `docker-compose.yml`, fill it in, and run `docker compose up -d`. Git ignores
+  `.env`, so the key stays out of the repository. A Blender that hosts the hub
+  itself reads the same variables from its own environment.
+
+| Variable | `run.py` flag | Meaning |
+| --- | --- | --- |
+| `GMEB_CARTO_KEY` | `--carto-key` | CARTO key for the Dark and Light layers |
+| `GMEB_TILE_URL` | `--tile-url` | an extra XYZ layer, shown as **Custom**, for example `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=KEY` |
+| `GMEB_TILE_ATTRIBUTION` | `--tile-attribution` | the credit that layer's provider asks for, shown as plain text |
+| `GMEB_GEOCODER_URL` | `--geocoder-url` | a Nominatim-compatible search address, with `{query}` where the search text goes |
+
+These keys are browser keys. Anyone who can open the interface can read them,
+from the page or from the tile requests it makes. Put only keys meant for
+client-side use here, and use the provider's referrer or domain restriction
+where it has one.
+
 ---
 
 ## Using it
@@ -319,7 +366,8 @@ interface inside Blender instead, in which case the **Hub Port** setting applies
 Areas are always selected visually:
 
 1. Get to the place. The search field takes any of three things:
-   - a place name, geocoded through Nominatim,
+   - a place name, geocoded through Nominatim or the search address set under
+     [Map settings](#map-layers-search-and-keys),
    - coordinates — `43.7231, 10.3963` or `43°43'23.2"N 10°23'46.7"E`,
    - a **Google Maps link**, pasted straight from the address bar.
 2. Press **Draw area** and drag a rectangle — or **Use view** to take what is on
@@ -463,7 +511,8 @@ folders on the machine running that Blender. You can also type or paste a path.
 It is worth saying why it is not the browser's own folder dialog. Browsers
 deliberately withhold absolute paths: `showDirectoryPicker()` hands back a
 folder *name*, and a directory `<input>` hands back paths relative to whatever
-was chosen. Neither can say that a folder is `D:efs`, which is exactly what
+was chosen. Neither can say that a folder is `D:
+efs`, which is exactly what
 the export needs. So the listing comes from the Blender side, where the path is
 known, and is navigated in the page.
 
@@ -671,6 +720,11 @@ cd web && npm run screenshots        # drives your installed Edge
 ---
 
 ## Troubleshooting
+
+**The map reads "API KEY REQUIRED".** CARTO's Dark and Light layers need a key
+since September 2026. Add one under the gear button or as `GMEB_CARTO_KEY`, or
+switch to Streets or Satellite. See
+[Map layers, search and keys](#map-layers-search-and-keys).
 
 **"Node.js was not found."** Install it, or set the path in the add-on
 preferences. Blender on macOS does not inherit a shell `PATH`, so the usual

@@ -341,6 +341,40 @@ try:
     finally:
         secured.stop()
 
+    # --- map settings -----------------------------------------------------
+    print("\n--- map settings ---")
+    status, body = get("/api/session")
+    check("the session lists every map setting",
+          sorted((body.get("mapSettings") or {}).keys())
+          == sorted(hub.MAP_SETTINGS_ENV), body.get("mapSettings"))
+
+    from_env = hub.map_settings_from_env({"GMEB_CARTO_KEY": "  abc123  ",
+                                          "GMEB_TILE_URL": ""})
+    check("settings are read from the environment and trimmed",
+          from_env["cartoKey"] == "abc123" and from_env["tileUrl"] == ""
+          and from_env["geocoderUrl"] == "", from_env)
+
+    keyed = hub.serve(port=free_port(), web_dir=WEB, host="127.0.0.1",
+                      map_settings={"cartoKey": "k-1",
+                                    "geocoderUrl": "https://geo.example/?q={query}",
+                                    "unknown": "dropped"})
+    try:
+        with urllib.request.urlopen(
+                "http://127.0.0.1:%d/api/session" % keyed.port, timeout=6) as r:
+            settings = json.loads(r.read().decode()).get("mapSettings") or {}
+        check("given settings reach the interface",
+              settings.get("cartoKey") == "k-1"
+              and settings.get("geocoderUrl") == "https://geo.example/?q={query}"
+              and settings.get("tileUrl") == "", settings)
+        check("unknown settings are not passed on", "unknown" not in settings)
+        with urllib.request.urlopen(
+                "http://127.0.0.1:%d/api/hub" % keyed.port, timeout=6) as r:
+            described = json.loads(r.read().decode())
+        check("discovery does not carry the settings",
+              "mapSettings" not in described)
+    finally:
+        keyed.stop()
+
 finally:
     running.stop()
     probe = os.path.join(ROOT, "tests", "_secret_probe.txt")

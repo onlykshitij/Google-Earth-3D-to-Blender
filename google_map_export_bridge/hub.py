@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.1.5"
+VERSION = "1.1.6"
 
 DEFAULT_PORT = 8777
 
@@ -49,6 +49,28 @@ INSTANCE_TIMEOUT_SECONDS = 8.0
 
 MAX_BODY_BYTES = 256 * 1024
 MAX_COMMANDS_PER_INSTANCE = 8
+
+# Map settings the interface picks up when it opens, keyed by the name the
+# interface uses. All are optional: with none set, the interface uses map
+# layers and a search service that need no key. Each can also be overridden
+# per browser from the interface's settings dialog.
+#
+# Whatever is set here is handed to every browser that opens the interface,
+# because tile and search requests are made by the browser. Only put keys here
+# that are meant to be used client-side, such as CARTO's basemap key.
+MAP_SETTINGS_ENV = {
+    "cartoKey": "GMEB_CARTO_KEY",
+    "tileUrl": "GMEB_TILE_URL",
+    "tileAttribution": "GMEB_TILE_ATTRIBUTION",
+    "geocoderUrl": "GMEB_GEOCODER_URL",
+}
+
+
+def map_settings_from_env(environ=None):
+    """Read the map settings from the environment. Unset values are ''."""
+    environ = os.environ if environ is None else environ
+    return {name: (environ.get(var) or "").strip()
+            for name, var in MAP_SETTINGS_ENV.items()}
 
 for _ext, _mime in (
     (".js", "text/javascript"),
@@ -218,7 +240,7 @@ class Registry:
 
 
 class Hub:
-    def __init__(self, web_dir="", agent_token=""):
+    def __init__(self, web_dir="", agent_token="", map_settings=None):
         self.registry = Registry()
         self.web_dir = web_dir
         # Guards writes coming from a browser. A page on another origin can POST
@@ -227,6 +249,12 @@ class Hub:
         # Optional shared secret for agents, for deployments where the hub is
         # not reachable only from the local machine.
         self.agent_token = agent_token or ""
+        # Read from the environment when not given, so a hub started by the
+        # add-on inside Blender honours the same GMEB_* variables as run.py.
+        if map_settings is None:
+            map_settings = map_settings_from_env()
+        self.map_settings = {name: str(map_settings.get(name) or "").strip()
+                             for name in MAP_SETTINGS_ENV}
         self.started_at = time.time()
 
     # --- request handling ------------------------------------------------
@@ -390,6 +418,7 @@ class _Handler(BaseHTTPRequestHandler):
             payload = dict(self.hub.describe())
             payload["token"] = self.hub.web_token
             payload["instances"] = self.hub.registry.list()
+            payload["mapSettings"] = dict(self.hub.map_settings)
             self._json(payload)
             return
 
@@ -621,15 +650,19 @@ class RunningHub:
 
 
 def serve(port=DEFAULT_PORT, web_dir="", host="127.0.0.1", agent_token="",
-          port_attempts=1):
+          port_attempts=1, map_settings=None):
     """
     Start a hub. Raises OSError if no port could be bound.
 
     `port_attempts` above 1 walks upward from `port`, which lets a second
     Blender fall back to its own hub if the first port is taken by something
     that is not one of ours.
+
+    `map_settings` left as None reads the GMEB_* map variables from the
+    environment. See MAP_SETTINGS_ENV.
     """
-    hub = Hub(web_dir=web_dir, agent_token=agent_token)
+    hub = Hub(web_dir=web_dir, agent_token=agent_token,
+              map_settings=map_settings)
     loopback_only = host in ("127.0.0.1", "localhost", "::1")
 
     last = None

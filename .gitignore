@@ -23,3 +23,6 @@ __pycache__/
 # scratch
 proof/
 *.blend1
+
+# local settings and keys for docker compose
+.env

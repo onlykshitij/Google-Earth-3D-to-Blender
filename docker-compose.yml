@@ -35,3 +35,17 @@ services:
       # Shared secret Blender must present. Leave empty for local use; set it to
       # something long if you expose the port beyond this machine.
       GMEB_AGENT_TOKEN: "${GMEB_AGENT_TOKEN:-}"
+      # Map settings, all optional. Put the values in a .env file beside this
+      # one (see .env.example); git ignores it, so a key is never committed.
+      # Every browser that opens the interface receives these, because the
+      # browser fetches the tiles.
+      #
+      # CARTO's key for the Dark and Light layers, free from
+      # https://carto.com/basemaps/apikey. Without it, Dark falls back to
+      # OpenStreetMap tiles shaded dark and Light is hidden.
+      GMEB_CARTO_KEY: "${GMEB_CARTO_KEY:-}"
+      # An extra XYZ tile layer, shown as "Custom", with its attribution.
+      GMEB_TILE_URL: "${GMEB_TILE_URL:-}"
+      GMEB_TILE_ATTRIBUTION: "${GMEB_TILE_ATTRIBUTION:-}"
+      # A Nominatim-compatible search. {query} is replaced by the search text.
+      GMEB_GEOCODER_URL: "${GMEB_GEOCODER_URL:-}"

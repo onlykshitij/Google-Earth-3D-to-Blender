@@ -121,6 +121,20 @@ export type Listing = {
   error?: string;
 };
 
+/**
+ * Keys and addresses for the map and the search box. An empty string means
+ * "not set". Mirrors MAP_SETTINGS_ENV in hub.py.
+ */
+export type MapSettings = {
+  /** CARTO basemaps key, which the Dark and Light layers need. */
+  cartoKey: string;
+  /** An extra XYZ tile layer, shown as "Custom". */
+  tileUrl: string;
+  tileAttribution: string;
+  /** Nominatim-compatible search address, with {query} for the search text. */
+  geocoderUrl: string;
+};
+
 export type Session = {
   service: string;
   protocol: number;
@@ -128,6 +142,8 @@ export type Session = {
   token: string;
   uptime: number;
   instances: Instance[];
+  /** The hub's defaults. Absent on hubs older than 1.1.6. */
+  mapSettings?: Partial<MapSettings>;
 };
 
 /** A readable name for a Blender session, for the picker. */

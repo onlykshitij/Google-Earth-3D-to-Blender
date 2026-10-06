@@ -7,44 +7,120 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import type { LatLngBoundsExpression, Map as LeafletMap } from "leaflet";
-import type { Bbox } from "../types";
+import type { Bbox, MapSettings } from "../types";
 import { normaliseBbox, roundBbox } from "../lib/geo";
 
-export const BASEMAPS = {
-  dark: {
-    name: "Dark",
-    url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    stroke: "#5b9cff",
-  },
-  light: {
-    name: "Light",
-    url: "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    stroke: "#1b4fa8",
-  },
-  streets: {
-    name: "Streets",
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    stroke: "#0f3f8c",
-  },
-  satellite: {
-    name: "Satellite",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution:
-      "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS community",
-    stroke: "#ffd166",
-  },
-} as const;
+const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-export type BasemapKey = keyof typeof BASEMAPS;
+export type BasemapKey = "dark" | "light" | "streets" | "satellite" | "custom";
+
+export type Basemap = {
+  key: BasemapKey;
+  name: string;
+  url: string;
+  attribution: string;
+  stroke: string;
+  /** Extra class on the tile layer. The keyless Dark layer darkens with it. */
+  className?: string;
+};
+
+/** Whether a tile address looks usable: http(s), with {z}, {x} and {y}. */
+export function isTileUrl(url: string): boolean {
+  return (
+    /^https?:\/\/[^\s]+$/i.test(url.trim()) &&
+    ["{z}", "{x}", "{y}"].every((part) => url.includes(part))
+  );
+}
+
+/**
+ * Turn attribution from settings into plain text.
+ *
+ * Leaflet renders attribution as HTML, and this text comes from a setting
+ * rather than from this code, so tags are dropped and only their text kept.
+ */
+function plainAttribution(html: string): string {
+  const text =
+    new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * The map layers on offer for the given settings.
+ *
+ * Dark and Light come from CARTO, which has required a key since September
+ * 2026. A keyless request still gets a tile, but one that reads "API KEY
+ * REQUIRED". So without a key, Dark is OpenStreetMap's tiles darkened in the
+ * browser, and Light is left out because Streets already covers it.
+ */
+export function basemapsFor(settings: MapSettings): Basemap[] {
+  const layers: Basemap[] = [];
+  const cartoKey = encodeURIComponent(settings.cartoKey.trim());
+
+  if (cartoKey) {
+    layers.push(
+      {
+        key: "dark",
+        name: "Dark",
+        url: `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`,
+        attribution: CARTO_ATTRIBUTION,
+        stroke: "#5b9cff",
+      },
+      {
+        key: "light",
+        name: "Light",
+        url: `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`,
+        attribution: CARTO_ATTRIBUTION,
+        stroke: "#1b4fa8",
+      },
+    );
+  } else {
+    layers.push({
+      key: "dark",
+      name: "Dark",
+      url: OSM_TILES,
+      attribution: OSM_ATTRIBUTION,
+      stroke: "#5b9cff",
+      className: "tiles-dark",
+    });
+  }
+
+  layers.push(
+    {
+      key: "streets",
+      name: "Streets",
+      url: OSM_TILES,
+      attribution: OSM_ATTRIBUTION,
+      stroke: "#0f3f8c",
+    },
+    {
+      key: "satellite",
+      name: "Satellite",
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      attribution:
+        "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS community",
+      stroke: "#ffd166",
+    },
+  );
+
+  if (isTileUrl(settings.tileUrl)) {
+    layers.push({
+      key: "custom",
+      name: "Custom",
+      url: settings.tileUrl.trim(),
+      attribution: plainAttribution(settings.tileAttribution),
+      stroke: "#ff4fa3",
+    });
+  }
+
+  return layers;
+}
 
 type Props = {
-  basemap: BasemapKey;
+  layer: Basemap;
   bbox: Bbox | null;
   drawing: boolean;
   onBbox: (bbox: Bbox) => void;
@@ -178,15 +254,13 @@ function MapHandle({ onReady }: { onReady: (map: LeafletMap) => void }) {
 }
 
 export function MapCanvas({
-  basemap,
+  layer,
   bbox,
   drawing,
   onBbox,
   onDrawingEnd,
   onMapReady,
 }: Props) {
-  const layer = BASEMAPS[basemap];
-
   const bounds = useMemo<LatLngBoundsExpression | null>(() => {
     if (!bbox) return null;
     return [
@@ -210,11 +284,13 @@ export function MapCanvas({
        */
       className="absolute inset-0 z-0 h-full w-full"
     >
-      {/* Keying on the URL forces a fresh layer when the basemap changes. */}
+      {/* Keying on the URL forces a fresh layer when the basemap or its key
+          changes. Leaflet does not re-read these options on an existing layer. */}
       <TileLayer
-        key={basemap}
+        key={`${layer.key}|${layer.url}|${layer.attribution}`}
         url={layer.url}
         attribution={layer.attribution}
+        className={layer.className}
         maxZoom={21}
         maxNativeZoom={19}
       />

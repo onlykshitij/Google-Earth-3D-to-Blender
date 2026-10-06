@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap } from "leaflet";
-import { BASEMAPS, MapCanvas, type BasemapKey } from "./components/MapCanvas";
+import { basemapsFor, MapCanvas, type BasemapKey } from "./components/MapCanvas";
 import { SearchBox } from "./components/SearchBox";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { InstancePicker } from "./components/InstancePicker";
 import { VersionChip } from "./components/VersionChip";
 import * as api from "./api";
-import type { Bbox, ExportOptions, Instance, Session } from "./types";
+import type { Bbox, ExportOptions, Instance, MapSettings, Session } from "./types";
 import { TERMINAL_PHASES } from "./types";
 import { isEmpty, roundBbox } from "./lib/geo";
+import * as settings from "./lib/settings";
 
 const DEFAULT_OPTIONS: ExportOptions = {
   level: 20,
@@ -44,6 +46,26 @@ export default function App() {
   const [drawing, setDrawing] = useState(false);
   const [basemap, setBasemap] = useState<BasemapKey>("dark");
   const [options, setOptionsState] = useState<ExportOptions>(DEFAULT_OPTIONS);
+
+  // This browser's map settings, layered over the hub's defaults.
+  const [localSettings, setLocalSettings] = useState<Partial<MapSettings>>(
+    settings.loadLocal,
+  );
+  const [storageWorks] = useState(settings.storageAvailable);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const mapSettings = useMemo(
+    () => settings.effective(session?.mapSettings, localSettings),
+    [session, localSettings],
+  );
+  const basemaps = useMemo(() => basemapsFor(mapSettings), [mapSettings]);
+  // A layer can disappear when a key is removed, so fall back to the first.
+  const layer = basemaps.find((b) => b.key === basemap) ?? basemaps[0];
+
+  const saveSettings = (next: Partial<MapSettings>) => {
+    settings.saveLocal(next);
+    setLocalSettings(settings.clean(next));
+    setSettingsOpen(false);
+  };
 
   const mapRef = useRef<LeafletMap | null>(null);
 
@@ -174,7 +196,7 @@ export default function App() {
   return (
     <div className="relative h-full w-full">
       <MapCanvas
-        basemap={basemap}
+        layer={layer}
         bbox={bbox}
         drawing={drawing}
         onBbox={setBbox}
@@ -201,9 +223,29 @@ export default function App() {
                 connected={connected}
               />
               <VersionChip version={session?.version ?? ""} />
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="-mr-1 rounded-md p-1 text-ink-400 transition hover:bg-white/[0.06] hover:text-ink-200"
+                aria-label="Map settings"
+                title="Map settings: keys for map layers and search"
+              >
+                <svg
+                  className="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
             </div>
 
             <SearchBox
+              geocoderUrl={mapSettings.geocoderUrl}
               onPick={(r) => {
                 const map = mapRef.current;
                 if (!map) return;
@@ -234,17 +276,17 @@ export default function App() {
 
           <div className="flex items-end justify-between gap-2">
             <div className="panel pointer-events-auto flex gap-0.5 p-1">
-              {(Object.keys(BASEMAPS) as BasemapKey[]).map((key) => (
+              {basemaps.map((b) => (
                 <button
-                  key={key}
-                  onClick={() => setBasemap(key)}
+                  key={b.key}
+                  onClick={() => setBasemap(b.key)}
                   className={`rounded-md px-2.5 py-1.5 text-[11px] font-medium transition ${
-                    basemap === key
+                    layer.key === b.key
                       ? "bg-accent/90 text-ink-950"
                       : "text-ink-400 hover:bg-white/[0.06] hover:text-ink-200"
                   }`}
                 >
-                  {BASEMAPS[key].name}
+                  {b.name}
                 </button>
               ))}
             </div>
@@ -288,6 +330,16 @@ export default function App() {
           onCancel={handleCancel}
         />
       </div>
+
+      {settingsOpen && (
+        <SettingsDialog
+          hub={session?.mapSettings ?? {}}
+          local={localSettings}
+          storageWorks={storageWorks}
+          onSave={saveSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

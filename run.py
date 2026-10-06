@@ -7,6 +7,7 @@ Run the map interface outside Blender.
     python run.py --host 0.0.0.0  # reachable from other machines
     python run.py --build         # build the interface first, needs npm
     python run.py --no-browser
+    python run.py --carto-key KEY # CARTO's Dark and Light map layers
 
 No dependencies beyond the standard library, and no Blender. The hub serves the
 interface and waits for Blender sessions to check in; any Blender whose Hub URL
@@ -197,14 +198,41 @@ def main(argv=None):
         "--no-browser", action="store_true",
         default=env_flag("GMEB_NO_BROWSER"),
         help="do not open a browser window")
+
+    # Map settings, handed to every browser that opens the interface. Each
+    # browser can also override them from the interface's settings dialog.
+    env_maps = hub_module.map_settings_from_env()
+    parser.add_argument(
+        "--carto-key", default=env_maps["cartoKey"],
+        help="CARTO basemaps key, which the Dark and Light layers need. "
+             "Free from https://carto.com/basemaps/apikey")
+    parser.add_argument(
+        "--tile-url", default=env_maps["tileUrl"],
+        help="an extra XYZ tile layer, shown as Custom, for example "
+             "https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=KEY")
+    parser.add_argument(
+        "--tile-attribution", default=env_maps["tileAttribution"],
+        help="attribution text for the --tile-url layer")
+    parser.add_argument(
+        "--geocoder-url", default=env_maps["geocoderUrl"],
+        help="Nominatim-compatible search address, with {query} where the "
+             "search text goes. Default: nominatim.openstreetmap.org")
     args = parser.parse_args(argv)
 
     web_dir = resolve_web_dir(args.web_dir, args.build)
 
+    map_settings = {
+        "cartoKey": args.carto_key,
+        "tileUrl": args.tile_url,
+        "tileAttribution": args.tile_attribution,
+        "geocoderUrl": args.geocoder_url,
+    }
+
     try:
         running = hub_module.serve(port=args.port, web_dir=web_dir,
                                    host=args.host,
-                                   agent_token=args.agent_token)
+                                   agent_token=args.agent_token,
+                                   map_settings=map_settings)
     except OSError as exc:
         sys.exit("Could not bind %s:%d - %s" % (args.host, args.port, exc))
 
@@ -224,6 +252,14 @@ def main(argv=None):
         print("  bound to  : %s:%d (all interfaces)" % (args.host, running.port))
     if args.agent_token:
         print("  agent token required")
+    # Say which map settings are in force, never their values.
+    configured = [label for label, value in (
+        ("CARTO key", args.carto_key),
+        ("custom tile layer", args.tile_url),
+        ("custom search", args.geocoder_url),
+    ) if value]
+    if configured:
+        print("  map       : %s set" % ", ".join(configured))
     print()
     print("In Blender: Preferences > Add-ons > Google Map Export Bridge, set")
     if blender_url:
