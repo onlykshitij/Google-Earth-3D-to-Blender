@@ -330,6 +330,12 @@ class JobManager:
         cmd = [node, script, "--bbox=" + bbox_arg,
                "--level=%d" % int(params["level"])]
 
+        # A tilted area: the exporter probes only the part of the bbox inside it.
+        polygon = params.get("polygon")
+        if polygon:
+            cmd.append("--polygon=" + ";".join(
+                "%.9f,%.9f" % (lat, lng) for lat, lng in polygon))
+
         cache = params.get("texture_cache")
         if cache:
             try:
@@ -392,6 +398,13 @@ class JobManager:
                                               % (failed + blank,
                                                  "" if failed + blank == 1
                                                  else "s"))
+
+                    elif event == "area":
+                        probes = int(data.get("probes", 0) or 0)
+                        skipped = int(data.get("skipped", 0) or 0)
+                        self._set(message="Searching %d points in the tilted "
+                                          "area (%d outside it skipped)"
+                                          % (probes, skipped))
 
                     elif event == "octants":
                         # The deepest level Google actually has here. Less than

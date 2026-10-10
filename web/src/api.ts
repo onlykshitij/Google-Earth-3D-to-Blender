@@ -1,4 +1,11 @@
-import type { Bbox, ExportOptions, Instance, Listing, Session } from "./types";
+import type {
+  Bbox,
+  Corner,
+  ExportOptions,
+  Instance,
+  Listing,
+  Session,
+} from "./types";
 
 /**
  * Client for the hub.
@@ -41,15 +48,26 @@ export function getInstances() {
   return request<{ instances: Instance[] }>("api/instances");
 }
 
+/**
+ * Export an area. `corners` marks a tilted area inside `bbox`; the exporter then
+ * probes only the part of the bbox they cover.
+ */
 export function startExport(
   token: string,
   instanceId: string,
   bbox: Bbox,
   options: ExportOptions,
+  corners: Corner[] | null = null,
 ) {
   return request<{ accepted: boolean; instanceId: string }>("api/export", {
     method: "POST",
-    body: JSON.stringify({ token, instanceId, bbox, options }),
+    body: JSON.stringify({
+      token,
+      instanceId,
+      bbox,
+      options,
+      ...(corners ? { polygon: corners } : {}),
+    }),
   });
 }
 

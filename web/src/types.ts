@@ -7,6 +7,9 @@ export type Bbox = {
   maxLng: number;
 };
 
+/** A corner of a tilted area, as [lat, lng]. */
+export type Corner = [number, number];
+
 /** Keep in step with the PHASE_* constants in jobs.py. */
 export type Phase =
   | "idle"
@@ -93,6 +96,8 @@ export type InstanceInfo = {
   nodeFound?: boolean;
   onlineAccess?: boolean;
   hosting?: boolean;
+  /** The add-on's version. Absent before 1.1.7, which cannot export tilted areas. */
+  addonVersion?: string;
   defaults?: Partial<ExportOptions>;
 };
 

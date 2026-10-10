@@ -187,6 +187,38 @@ try:
     status, body = agent_poll("bbb", {"blendFile": "beta.blend", "pid": 2})
     check("commands are delivered only once", body.get("commands") == [])
 
+    check("a plain box carries no polygon", "polygon" not in commands[0],
+          commands[0])
+
+    # --- tilted areas -----------------------------------------------------
+    print("\n--- tilted areas ---")
+    # A diamond inside BBOX, as a box drawn on a map turned 45 degrees gives.
+    diamond = [[43.7233, 10.3942], [43.72315, 10.3944],
+               [43.7230, 10.3942], [43.72315, 10.3940]]
+    status, body = post("/api/export", {"token": token, "instanceId": "bbb",
+                                        "bbox": BBOX, "polygon": diamond})
+    check("an export with a polygon is accepted", status == 200, body)
+    status, body = agent_poll("bbb", {"blendFile": "beta.blend", "pid": 2})
+    commands = body.get("commands") or []
+    check("the polygon reaches Blender with the export",
+          len(commands) == 1 and commands[0].get("polygon") == diamond,
+          commands)
+
+    for label, polygon in (
+        ("too few corners", diamond[:2]),
+        ("a corner outside the bbox", diamond[:3] + [[43.80, 10.3942]]),
+        ("a corner that is not a pair", diamond[:3] + [[43.7231]]),
+        ("a corner that is a string", diamond[:3] + ["43.7231,10.3942"]),
+        ("not a list", "43.7233,10.3942;43.7230,10.3942;43.7231,10.3944"),
+    ):
+        status, body = post("/api/export", {"token": token, "instanceId": "bbb",
+                                            "bbox": BBOX, "polygon": polygon})
+        check("a polygon with %s is refused" % label, status == 400,
+              body.get("error"))
+    status, body = agent_poll("bbb", {"blendFile": "beta.blend", "pid": 2})
+    check("refused polygons queue nothing", body.get("commands") == [],
+          body.get("commands"))
+
     # --- busy and cancel --------------------------------------------------
     print("\n--- busy and cancel ---")
     agent_poll("bbb", {"blendFile": "beta.blend", "pid": 2},

@@ -5,12 +5,23 @@ import { CoordinatesToOctants } from './coordinates-to-octants';
 import { DumpObjApp, ObjWriter } from './dump-obj';
 import { centerScaleObj } from './center-scale-obj';
 import { OBJ_DIR } from './constants/constants';
+import { makeAreaTest, parseCorners } from './utils/area';
+
+// The probe lattice step, in degrees. Matches convertBBoxToOctants.
+const PROBE_STEP = 0.0001;
 
 const argv = yargs(hideBin(process.argv))
   .option('bbox', {
     type: 'string',
     demandOption: true,
     describe: 'Area to export, as --bbox=minLat,minLng,maxLat,maxLng',
+  })
+  .option('polygon', {
+    type: 'string',
+    default: '',
+    describe:
+      'Corners of a tilted area inside --bbox, as --polygon=lat,lng;lat,lng;... ' +
+      'Only lattice points inside it (or within one step of its edge) are probed',
   })
   .option('level', {
     type: 'number',
@@ -86,13 +97,31 @@ async function bootstrap() {
 
   emit('start', { bbox: argv.bbox, level: maxLevel });
 
+  // A tilted area: probe only the part of the lattice it covers. The margin of
+  // one lattice step keeps octants that straddle a slanted edge.
+  let include: ((lat: number, lon: number) => boolean) | undefined;
+  if (argv.polygon) {
+    const corners = parseCorners(argv.polygon);
+    include = makeAreaTest(corners, PROBE_STEP);
+    const [northEast, southWest] = bbox;
+    let inside = 0;
+    let total = 0;
+    for (let lat = southWest.latitude; lat <= northEast.latitude; lat += PROBE_STEP) {
+      for (let lon = southWest.longitude; lon <= northEast.longitude; lon += PROBE_STEP) {
+        total++;
+        if (include(lat, lon)) inside++;
+      }
+    }
+    emit('area', { corners: corners.length, probes: inside, skipped: total - inside });
+  }
+
   const app = new DumpObjApp();
 
   if (argv['texture-cache']) {
     ObjWriter.textureCacheDir = String(argv['texture-cache']);
   }
 
-  const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel);
+  const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel, include);
 
   // Take the deepest level found plus its parent, matching the original
   // behaviour at level 20. Overlap between the two is handled downstream: each

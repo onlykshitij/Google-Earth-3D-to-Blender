@@ -36,7 +36,7 @@ bl_info = {
     "description": "Import Google Earth 3D areas as oriented, levelled "
                    "modelling references",
     "author": "Sentics",
-    "version": (1, 1, 6),
+    "version": (1, 1, 7),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Map Export",
     "category": "Import-Export",
@@ -58,7 +58,8 @@ def _handle_command(context, command):
         bbox = command.get("bbox")
         if not isinstance(bbox, dict):
             return
-        job, error = launch.start(context, bbox, command.get("options"))
+        job, error = launch.start(context, bbox, command.get("options"),
+                                  command.get("polygon"))
         if error:
             print("[google-map-export-bridge] export rejected: %s" % error)
             jobs.MANAGER.record_failure(bbox, error)
@@ -76,7 +77,8 @@ def _handle_command(context, command):
         options = command.get("options") or {}
         if not isinstance(bbox, dict):
             return
-        started, error = launch.start(context, bbox, options or None)
+        started, error = launch.start(context, bbox, options or None,
+                                      job.params.get("polygon"))
         if error:
             print("[google-map-export-bridge] retry rejected: %s" % error)
             jobs.MANAGER.record_failure(bbox, error)

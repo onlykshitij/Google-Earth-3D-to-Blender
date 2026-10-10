@@ -132,6 +132,8 @@ if instances:
     check("the detail level offered is capped at 20",
           (info.get("defaults") or {}).get("level", 0) <= 20,
           (info.get("defaults") or {}).get("level"))
+    check("instance reports its add-on version",
+          info.get("addonVersion") == mod.hub.VERSION, info.get("addonVersion"))
 
 instance_id = instances[0]["id"] if instances else ""
 
@@ -199,22 +201,31 @@ status, resp = post("/api/export", {
 })
 check("export accepted", status == 200 and resp.get("accepted"), resp)
 
-print("\nrunning...")
-deadline = time.time() + 900
-last = None
-while time.time() < deadline:
-    mod._tick()
-    job = jobs.MANAGER.job
-    if job is not None:
-        tag = (job.phase, job.message)
-        if tag != last:
-            last = tag
-            print("   %-12s %5.1f%%  %s" % (job.phase, job.progress * 100,
-                                            job.message[:60]))
-        if job.phase in jobs.TERMINAL_PHASES:
-            break
-    time.sleep(0.25)
 
+
+def wait_for_job(previous=None):
+    """Pump until the current job ends. Returns the messages it showed."""
+    print("\nrunning...")
+    seen = []
+    deadline = time.time() + 900
+    last = None
+    while time.time() < deadline:
+        mod._tick()
+        job = jobs.MANAGER.job
+        if job is not None and job is not previous:
+            tag = (job.phase, job.message)
+            if tag != last:
+                last = tag
+                seen.append(job.message)
+                print("   %-12s %5.1f%%  %s" % (job.phase, job.progress * 100,
+                                                job.message[:60]))
+            if job.phase in jobs.TERMINAL_PHASES:
+                break
+        time.sleep(0.25)
+    return seen
+
+
+wait_for_job()
 job = jobs.MANAGER.job
 check("export completed", job is not None and job.phase == jobs.PHASE_DONE,
       job.phase if job else "no job")
@@ -332,6 +343,48 @@ if job and job.phase == jobs.PHASE_DONE:
           all(n.extension == "EXTEND" for n in tex_nodes))
     check("texture files resolved",
           all(n.image and n.image.size[0] > 0 for n in tex_nodes))
+
+# --- a tilted area, as drawn on a rotated map --------------------------------
+# A diamond inside a slightly larger box: the exporter should probe only the
+# lattice points inside it and still bring back geometry.
+TILT_BBOX = {"minLat": 43.72290, "minLng": 10.39390,
+             "maxLat": 43.72340, "maxLng": 10.39450}
+DIAMOND = [[43.72340, 10.39420], [43.72315, 10.39450],
+           [43.72290, 10.39420], [43.72315, 10.39390]]
+first_job = jobs.MANAGER.job
+# The hub learns that the first job ended only on the agent's next poll, and
+# refuses a second export while it still thinks this Blender is busy.
+idle_by = time.time() + 15
+while time.time() < idle_by:
+    mod._tick()
+    me = [i for i in get("/api/instances")["instances"] if i["id"] == instance_id]
+    if me and not (me[0].get("state") or {}).get("busy"):
+        break
+    time.sleep(0.25)
+status, resp = post("/api/export", {
+    "token": session["token"],
+    "instanceId": instance_id,
+    "bbox": TILT_BBOX,
+    "polygon": DIAMOND,
+    "options": {"level": 20, "replacePrevious": True,
+                "collectionName": "E2E tilted"},
+})
+check("tilted export accepted", status == 200 and resp.get("accepted"), resp)
+messages = wait_for_job(first_job) if status == 200 else []
+tilted = jobs.MANAGER.job
+check("tilted export completed",
+      tilted is not None and tilted is not first_job
+      and tilted.phase == jobs.PHASE_DONE,
+      tilted.phase if tilted else "no job")
+check("the corners reached the job",
+      tilted is not None and len(tilted.params.get("polygon") or []) == 4,
+      tilted.params.get("polygon") if tilted else None)
+check("the exporter skipped points outside the tilted area",
+      any("tilted area" in m and "skipped" in m for m in messages), messages)
+tilted_coll = bpy.data.collections.get("E2E tilted")
+check("tilted area imported",
+      tilted_coll is not None
+      and any(o.type == "MESH" for o in tilted_coll.objects))
 
 # --- the update button must not take Blender down with it --------------------
 # Installing an extension while a Python operator is still on the stack crashes

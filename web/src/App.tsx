@@ -1,15 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap } from "leaflet";
-import { basemapsFor, MapCanvas, type BasemapKey } from "./components/MapCanvas";
+import {
+  basemapsFor,
+  MapCanvas,
+  screenRectCorners,
+  type BasemapKey,
+} from "./components/MapCanvas";
+import { RotationDial } from "./components/RotationDial";
 import { SearchBox } from "./components/SearchBox";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { InstancePicker } from "./components/InstancePicker";
 import { VersionChip } from "./components/VersionChip";
 import * as api from "./api";
-import type { Bbox, ExportOptions, Instance, MapSettings, Session } from "./types";
+import type {
+  Bbox,
+  Corner,
+  ExportOptions,
+  Instance,
+  MapSettings,
+  Session,
+} from "./types";
 import { TERMINAL_PHASES } from "./types";
 import { isEmpty, roundBbox } from "./lib/geo";
+import { envelope, isTilted, roundCorners } from "./lib/area";
 import * as settings from "./lib/settings";
 
 const DEFAULT_OPTIONS: ExportOptions = {
@@ -40,7 +54,11 @@ export default function App() {
   const [connected, setConnected] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [bbox, setBbox] = useState<Bbox | null>(null);
+  const [bbox, setBboxState] = useState<Bbox | null>(null);
+  // The selection's corners when it is tilted, which happens when it was drawn
+  // on a rotated map. The bbox then encloses them.
+  const [corners, setCorners] = useState<Corner[] | null>(null);
+  const [bearing, setBearing] = useState(0);
   // The map pans by default. Starting in drawing mode meant a drag drew a
   // box instead of moving the map, so you could not get anywhere first.
   const [drawing, setDrawing] = useState(false);
@@ -148,7 +166,7 @@ export default function App() {
     if (!session || !selected || !bbox || isEmpty(bbox)) return;
     setError(null);
     try {
-      await api.startExport(session.token, selected.id, bbox, options);
+      await api.startExport(session.token, selected.id, bbox, options, corners);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -173,20 +191,47 @@ export default function App() {
     }
   };
 
+  /** A typed-in bbox is north-up, so it replaces any tilted area. */
+  const setBbox = useCallback((next: Bbox) => {
+    setBboxState(next);
+    setCorners(null);
+  }, []);
+
+  /**
+   * Take a box drawn on screen. On a rotated map its corners make a tilted
+   * area; otherwise they reduce to a plain bbox, exactly as before rotation.
+   */
+  const setArea = useCallback((drawn: Corner[]) => {
+    if (isTilted(drawn)) {
+      const rounded = roundCorners(drawn);
+      setBboxState(roundBbox(envelope(rounded)));
+      setCorners(rounded);
+    } else {
+      setBboxState(roundBbox(envelope(drawn)));
+      setCorners(null);
+    }
+  }, []);
+
+  const rotateTo = (degrees: number) => {
+    mapRef.current?.setBearing(degrees);
+  };
+  const rotateBy = (degrees: number) => {
+    const map = mapRef.current;
+    if (map) map.setBearing(map.getBearing() + degrees);
+  };
+
   const useCurrentView = () => {
     const map = mapRef.current;
     if (!map) return;
-    const b = map.getBounds();
-    // Inset a little so the selection reads as a selection, not the whole frame.
-    const latPad = (b.getNorth() - b.getSouth()) * 0.15;
-    const lngPad = (b.getEast() - b.getWest()) * 0.15;
-    setBbox(
-      roundBbox({
-        minLat: b.getSouth() + latPad,
-        maxLat: b.getNorth() - latPad,
-        minLng: b.getWest() + lngPad,
-        maxLng: b.getEast() - lngPad,
-      }),
+    // Inset a little so the selection reads as a selection, not the whole
+    // frame. Taken in screen space, so a rotated view gives a tilted area.
+    const size = map.getSize();
+    setArea(
+      screenRectCorners(
+        map,
+        size.multiplyBy(0.15),
+        size.multiplyBy(0.85),
+      ),
     );
     setDrawing(false);
   };
@@ -198,12 +243,14 @@ export default function App() {
       <MapCanvas
         layer={layer}
         bbox={bbox}
+        corners={corners}
         drawing={drawing}
-        onBbox={setBbox}
+        onCorners={setArea}
         onDrawingEnd={() => setDrawing(false)}
         onMapReady={(m) => {
           mapRef.current = m;
         }}
+        onBearing={setBearing}
       />
 
       {/* Overlay chrome. The wrapper ignores pointer events so the map stays
@@ -291,21 +338,30 @@ export default function App() {
               ))}
             </div>
 
-            <div className="panel pointer-events-auto flex flex-col p-1">
-              <button
-                onClick={() => mapRef.current?.zoomIn()}
-                className="rounded-md px-2 py-1 text-ink-300 transition hover:bg-white/[0.06]"
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-              <button
-                onClick={() => mapRef.current?.zoomOut()}
-                className="rounded-md px-2 py-1 text-ink-300 transition hover:bg-white/[0.06]"
-                aria-label="Zoom out"
-              >
-                −
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="panel pointer-events-auto p-1.5">
+                <RotationDial
+                  bearing={bearing}
+                  onChange={rotateTo}
+                  onNudge={rotateBy}
+                />
+              </div>
+              <div className="panel pointer-events-auto flex flex-col p-1">
+                <button
+                  onClick={() => mapRef.current?.zoomIn()}
+                  className="rounded-md px-2 py-1 text-ink-300 transition hover:bg-white/[0.06]"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => mapRef.current?.zoomOut()}
+                  className="rounded-md px-2 py-1 text-ink-300 transition hover:bg-white/[0.06]"
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -316,6 +372,7 @@ export default function App() {
           onlineCount={onlineCount}
           hubConnected={connected}
           bbox={bbox}
+          corners={corners}
           setBbox={setBbox}
           options={options}
           setOptions={setOptions}

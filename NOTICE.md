@@ -18,9 +18,11 @@ into the add-on as the single file
 `google_map_export_bridge/exporter/earth-export.cjs`. That bundle is a
 derivative of the MIT-licensed sources and carries the notice below.
 
-Two changes were made to the vendored sources, both documented in the README: a
-`--level` option so the octant depth is selectable, and a bounding-box parser
-that no longer rejects a coordinate of exactly `0`.
+The vendored sources have been changed here. Among the changes are a `--level`
+option so the octant depth is selectable, a bounding-box parser that no longer
+rejects a coordinate of exactly `0`, and a `--polygon` option that probes only
+the part of the box inside a tilted area. `git log -- vendor/earth-exporter`
+lists every change.
 
 ```
 Copyright (c) 2025 KIWIbird717
@@ -66,11 +68,21 @@ building on it commercially, should form their own view on that.
 The bundled exporter also embeds Google's own minified tile-decoding code, which
 that project extracted. It is Google's, not ours and not the exporter author's.
 
+### leaflet-rotate — GPL-3.0
+
+<https://github.com/Raruto/leaflet-rotate>
+
+Map rotation in the interface comes from this Leaflet plugin, by Raruto and
+contributors, which is bundled into the built interface. It is licensed under
+the GNU General Public License v3.0, which permits combining it with this
+AGPL-3.0 project (GPL-3.0 section 13); its own copy keeps its own licence.
+
 ### Runtime dependencies
 
 The interface uses React, Leaflet, Tailwind CSS and Vite, each under its own
-permissive licence; see `web/package.json` and the generated lockfile. The hub
-and the add-on use only the Python standard library and Blender's `bpy`.
+permissive licence, and leaflet-rotate as above; see `web/package.json` and the
+generated lockfile. The hub and the add-on use only the Python standard library
+and Blender's `bpy`.
 
 ---
 

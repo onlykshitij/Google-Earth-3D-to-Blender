@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.1.6"
+VERSION = "1.1.7"
 
 DEFAULT_PORT = 8777
 
@@ -49,6 +49,13 @@ INSTANCE_TIMEOUT_SECONDS = 8.0
 
 MAX_BODY_BYTES = 256 * 1024
 MAX_COMMANDS_PER_INSTANCE = 8
+
+# A tilted area is sent as its corners. Four for a box drawn on a rotated map;
+# the limit leaves room for other shapes without inviting huge payloads.
+MAX_POLYGON_CORNERS = 16
+# How far a corner may sit outside the bbox, in degrees. The interface rounds
+# the bbox to six places, which can shave a few centimetres off a corner.
+POLYGON_BBOX_SLACK = 1e-5
 
 # Map settings the interface picks up when it opens, keyed by the name the
 # interface uses. All are optional: with none set, the interface uses map
@@ -288,8 +295,39 @@ class Hub:
         return online[0]["id"], None
 
 
+def validate_polygon(raw, bbox):
+    """
+    Check a tilted area's corners against its bbox. Returns them as a list of
+    [lat, lng] floats, or None when there is no polygon. Raises ValueError.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or not 3 <= len(raw) <= MAX_POLYGON_CORNERS:
+        raise ValueError("polygon needs 3 to %d corners" % MAX_POLYGON_CORNERS)
+
+    corners = []
+    for corner in raw:
+        try:
+            if not isinstance(corner, list):
+                raise TypeError
+            lat, lng = (float(v) for v in corner)
+        except (TypeError, ValueError):
+            raise ValueError("Each polygon corner must be a [lat, lng] pair")
+        if not (bbox["minLat"] - POLYGON_BBOX_SLACK <= lat
+                <= bbox["maxLat"] + POLYGON_BBOX_SLACK
+                and bbox["minLng"] - POLYGON_BBOX_SLACK <= lng
+                <= bbox["maxLng"] + POLYGON_BBOX_SLACK):
+            raise ValueError("polygon corner %s, %s is outside the bbox"
+                             % (lat, lng))
+        corners.append([lat, lng])
+    return corners
+
+
 def validate_export(payload):
-    """Check a browser's export request. Raises ValueError with a reason."""
+    """
+    Check a browser's export request. Returns (bbox, options, polygon), where
+    polygon is None for a plain north-up box. Raises ValueError with a reason.
+    """
     if not isinstance(payload, dict):
         raise ValueError("Expected a JSON object")
 
@@ -316,7 +354,9 @@ def validate_export(payload):
     if not isinstance(options, dict):
         raise ValueError("options must be an object")
 
-    return values, options
+    polygon = validate_polygon(payload.get("polygon"), values)
+
+    return values, options, polygon
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -475,7 +515,7 @@ class _Handler(BaseHTTPRequestHandler):
             if not self._web_token_ok(payload):
                 return
             try:
-                bbox, options = validate_export(payload)
+                bbox, options, polygon = validate_export(payload)
             except ValueError as exc:
                 self._json({"error": str(exc)}, 400)
                 return
@@ -492,9 +532,13 @@ class _Handler(BaseHTTPRequestHandler):
                            409)
                 return
 
-            if not self.hub.registry.push(target, {"type": "export",
-                                                   "bbox": bbox,
-                                                   "options": options}):
+            command = {"type": "export", "bbox": bbox, "options": options}
+            # Left out for a plain box, so the command an add-on older than
+            # 1.1.7 receives is unchanged. Such an add-on ignores the key anyway
+            # and exports the whole bbox.
+            if polygon:
+                command["polygon"] = polygon
+            if not self.hub.registry.push(target, command):
                 self._json({"error": "Could not queue the export."}, 409)
                 return
             self._json({"accepted": True, "instanceId": target})

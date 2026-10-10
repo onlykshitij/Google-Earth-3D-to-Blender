@@ -333,7 +333,15 @@ export class OctantConverter {
    * @param bbox - выделенная зона на карте
    * @param maxLevel - уровень детализации
    */
-  public async convertBBoxToOctants(bbox: BBox, maxLevel: number): Promise<FoundOctants> {
+  /**
+   * Walks a lattice over the box and collects the octants under each point.
+   * `include`, when given, skips points outside a tilted area within the box.
+   */
+  public async convertBBoxToOctants(
+    bbox: BBox,
+    maxLevel: number,
+    include?: (lat: number, lon: number) => boolean,
+  ): Promise<FoundOctants> {
     this.validateBBox(bbox);
     await this.initializePlanetoid();
 
@@ -349,6 +357,7 @@ export class OctantConverter {
 
     for (let lat = southWest.lat; lat <= northEast.lat; lat += latStep) {
       for (let lon = southWest.lon; lon <= northEast.lon; lon += lonStep) {
+        if (include && !include(lat, lon)) continue;
         try {
           const pointOctants = await this.convertLatLongToOctant(lat, lon, maxLevel);
 

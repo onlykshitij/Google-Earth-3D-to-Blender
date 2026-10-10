@@ -133,6 +133,12 @@
   cursor: crosshair !important;
 }
 
+/* Ctrl + drag is turning the map. */
+.map-rotating,
+.map-rotating * {
+  cursor: grabbing !important;
+}
+
 /* The Dark layer without a CARTO key: OpenStreetMap's tiles, inverted. The
    hue turn puts water back to blue and parks back to green after the invert. */
 .tiles-dark {

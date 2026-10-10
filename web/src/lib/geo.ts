@@ -1,4 +1,5 @@
-import type { Bbox } from "../types";
+import type { Bbox, Corner } from "../types";
+import { probeCountInArea } from "./area";
 
 const METRES_PER_DEGREE_LAT = 111_320;
 
@@ -38,9 +39,15 @@ export type Cost = {
   severity: "ok" | "warn" | "heavy";
 };
 
-export function estimateCost(bbox: Bbox | null): Cost | null {
+/** `corners` narrows the count to a tilted area inside the bbox. */
+export function estimateCost(
+  bbox: Bbox | null,
+  corners: Corner[] | null = null,
+): Cost | null {
   if (!bbox || isEmpty(bbox)) return null;
-  const probes = probeCount(bbox);
+  const probes = corners
+    ? probeCountInArea(bbox, corners, PROBE_STEP_DEG)
+    : probeCount(bbox);
 
   if (probes <= 400) {
     return { probes, label: "Quick", severity: "ok", detail: "under a minute" };

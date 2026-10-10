@@ -13,7 +13,7 @@ import time
 
 import bpy
 
-from . import agent, connect, jobs, prefs
+from . import agent, connect, hub as hub_module, jobs, prefs
 
 # See PRACTICAL_MAX_LEVEL in obj_transform for why 20 and not 21.
 MAX_USEFUL_LEVEL = 20
@@ -51,6 +51,9 @@ def publish_info(context):
         "nodeFound": bool(p.resolved_node()),
         "onlineAccess": bool(getattr(bpy.app, "online_access", True)),
         "hosting": connect.is_hosting(),
+        # Lets the interface tell whether this add-on can export a tilted
+        # area, which 1.1.7 added.
+        "addonVersion": hub_module.VERSION,
     }
 
     if settings is not None:
@@ -116,7 +119,7 @@ def job_folder_name(bbox):
     return _safe_component("%.5f_%.5f_%s" % (lat, lng, stamp))
 
 
-def build_params(context, bbox, options=None):
+def build_params(context, bbox, options=None, polygon=None):
     settings = context.scene.gmeb
     p = prefs.get_prefs(context)
 
@@ -142,6 +145,8 @@ def build_params(context, bbox, options=None):
         "script_path": exporter_script(),
         "job_dir": job_dir,
         "bbox": bbox,
+        # Corners of a tilted area inside the bbox, or None for the whole bbox.
+        "polygon": polygon,
         # Clamped because the interface is not the only caller: the API
         # accepts a level directly, and above 20 the exporter returns less
         # geometry for twice the download.
@@ -203,6 +208,26 @@ def apply_bbox_to_scene(context, bbox):
     s.max_lng = bbox["maxLng"]
 
 
+def clean_polygon(raw):
+    """
+    The corners of a tilted area as a list of (lat, lng) floats, or None when
+    `raw` is not 3 to 16 usable corners. The hub has checked them already, but
+    a command can also arrive from a hub of another version.
+    """
+    if not isinstance(raw, (list, tuple)) or not 3 <= len(raw) <= 16:
+        return None
+    corners = []
+    for corner in raw:
+        try:
+            lat, lng = (float(v) for v in corner)
+        except (TypeError, ValueError):
+            return None
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+            return None
+        corners.append((lat, lng))
+    return corners
+
+
 def validate(bbox):
     if bbox["maxLat"] <= bbox["minLat"] or bbox["maxLng"] <= bbox["minLng"]:
         return "The selected area is empty - drag out a rectangle first."
@@ -211,13 +236,18 @@ def validate(bbox):
     return None
 
 
-def start(context, bbox, options=None):
-    """Validate and launch. Returns (job, error_message)."""
+def start(context, bbox, options=None, polygon=None):
+    """
+    Validate and launch. Returns (job, error_message).
+
+    `polygon` is the corners of a tilted area inside the bbox. Unusable corners
+    fall back to exporting the whole bbox, which is never less than was asked.
+    """
     problem = validate(bbox)
     if problem:
         return None, problem
 
-    params = build_params(context, bbox, options)
+    params = build_params(context, bbox, options, clean_polygon(polygon))
 
     # Fail here, with a message naming the folder, rather than part-way through
     # a download that has nowhere to land.

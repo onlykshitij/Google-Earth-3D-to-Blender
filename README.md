@@ -370,11 +370,13 @@ Areas are always selected visually:
      [Map settings](#map-layers-search-and-keys),
    - coordinates — `43.7231, 10.3963` or `43°43'23.2"N 10°23'46.7"E`,
    - a **Google Maps link**, pasted straight from the address bar.
-2. Press **Draw area** and drag a rectangle — or **Use view** to take what is on
+2. Optionally, turn the map so the buildings you want line up with the screen.
+   See [Rotating the map](#rotating-the-map).
+3. Press **Draw area** and drag a rectangle — or **Use view** to take what is on
    screen.
-3. Check the estimate. The panel shows the ground size and how many points the
+4. Check the estimate. The panel shows the ground size and how many points the
    exporter will probe, which is what download time actually tracks.
-4. Press **Export to …**.
+5. Press **Export to …**.
 
 Progress runs both in the page and in Blender's own panel: downloading →
 georeferencing → importing. The model lands in its own collection, locked so you
@@ -383,6 +385,38 @@ cannot nudge it while modelling against it.
 > Shortened Maps links (`maps.app.goo.gl/…`) carry no coordinates — they only
 > appear after a redirect the browser cannot follow. Open the link in Google Maps
 > and copy the full URL instead.
+
+### Rotating the map
+
+A street or a site that runs at an angle fits badly in a north-up rectangle:
+most of the box is neighbouring blocks. Turn the map until it lines up with the
+screen, then draw the box as usual. The box follows the screen, so on the ground
+it comes out tilted to match, and the exporter downloads only what is inside it.
+
+| To | Do |
+| --- | --- |
+| turn freely | **Ctrl + drag** on the map (Cmd on a Mac) and twist around the centre |
+| turn in steps | **Shift + scroll** on the map: 5° per wheel notch, finer on a trackpad |
+| turn with the dial | drag around the compass dial above the zoom buttons |
+| turn by exact amounts | focus the dial and press the arrow keys: 1° each, 15° with Shift |
+| face north again | click the dial, or press Home on it |
+| turn on a touch screen | twist with two fingers |
+
+Holding Shift while dragging steps by 15°, and a drag that ends within 1.5° of
+north snaps to north. **Use view** on a rotated map takes a tilted box too.
+
+The panel shows how far the box is tilted and its real side lengths. The point
+count drops to the lattice points inside the tilted box, plus a margin of one
+lattice step (about 11 m) so that tiles crossing a slanted edge are still
+fetched. Typing into **Fine-tune coordinates** edits the north-up box around a
+tilted area and replaces it with that box.
+
+The model still arrives with +Y pointing north. Only the selection is tilted,
+not the import.
+
+A tilted area needs add-on 1.1.7 or newer in the Blender you export to. An older
+add-on ignores the tilt and downloads the whole north-up box around it, and the
+panel warns when that will happen.
 
 ### When Google has no 3D data
 
@@ -585,7 +619,9 @@ main thread corrupts it.
 ### Pipeline
 
 1. `node exporter/earth-export.cjs --bbox=… --level=20` downloads the octant
-   tree and writes `model.obj` in earth-centred metres, plus its textures.
+   tree and writes `model.obj` in earth-centred metres, plus its textures. A
+   tilted area adds `--polygon=lat,lng;…`, and only lattice points inside it
+   are probed.
 2. [`obj_transform.py`](google_map_export_bridge/obj_transform.py) streams that
    file three times: accumulate the centroid and note which vertices any face
    uses; project into East/North/Up and record the lowest point per ground cell;

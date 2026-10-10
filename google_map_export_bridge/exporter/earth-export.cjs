@@ -14151,7 +14151,11 @@ var OctantConverter = class {
    * @param bbox - выделенная зона на карте
    * @param maxLevel - уровень детализации
    */
-  async convertBBoxToOctants(bbox, maxLevel) {
+  /**
+   * Walks a lattice over the box and collects the octants under each point.
+   * `include`, when given, skips points outside a tilted area within the box.
+   */
+  async convertBBoxToOctants(bbox, maxLevel, include) {
     this.validateBBox(bbox);
     await this.initializePlanetoid();
     const foundOctants = {};
@@ -14161,6 +14165,7 @@ var OctantConverter = class {
     const lonStep = octantSize;
     for (let lat = southWest.lat; lat <= northEast.lat; lat += latStep) {
       for (let lon = southWest.lon; lon <= northEast.lon; lon += lonStep) {
+        if (include && !include(lat, lon)) continue;
         try {
           const pointOctants = await this.convertLatLongToOctant(lat, lon, maxLevel);
           for (const [level, levelData] of Object.entries(pointOctants)) {
@@ -14217,12 +14222,12 @@ var CoordinatesToOctants = class {
   static async convert(latitude, longitude) {
     return await converter.convertLatLongToOctant(latitude, longitude, MAX_OCTANT_LEVEL);
   }
-  static async convertBbox(bbox, maxLevel) {
+  static async convertBbox(bbox, maxLevel, include) {
     const serializedBbox = {
       northEast: { lat: bbox[0].latitude, lon: bbox[0].longitude },
       southWest: { lat: bbox[1].latitude, lon: bbox[1].longitude }
     };
-    return await converter.convertBBoxToOctants(serializedBbox, maxLevel);
+    return await converter.convertBBoxToOctants(serializedBbox, maxLevel, include);
   }
 };
 
@@ -14766,11 +14771,62 @@ function centerScaleObj(modelPath) {
   }
 }
 
+// src/utils/area.ts
+function makeAreaTest(corners, margin) {
+  const meanLat = corners.reduce((sum, c2) => sum + c2[0], 0) / corners.length;
+  const k2 = Math.cos(meanLat * Math.PI / 180);
+  const xs = corners.map((c2) => c2[1] * k2);
+  const ys = corners.map((c2) => c2[0]);
+  const n2 = corners.length;
+  const margin2 = margin * margin;
+  return (lat, lng) => {
+    const x = lng * k2;
+    const y = lat;
+    let inside = false;
+    for (let i = 0, j = n2 - 1; i < n2; j = i++) {
+      if (ys[i] > y !== ys[j] > y && x < (xs[j] - xs[i]) * (y - ys[i]) / (ys[j] - ys[i]) + xs[i]) {
+        inside = !inside;
+      }
+    }
+    if (inside) return true;
+    for (let i = 0, j = n2 - 1; i < n2; j = i++) {
+      const dx = xs[i] - xs[j];
+      const dy = ys[i] - ys[j];
+      const len2 = dx * dx + dy * dy;
+      const t2 = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - xs[j]) * dx + (y - ys[j]) * dy) / len2));
+      const ex = xs[j] + t2 * dx - x;
+      const ey = ys[j] + t2 * dy - y;
+      if (ex * ex + ey * ey <= margin2) return true;
+    }
+    return false;
+  };
+}
+function parseCorners(text) {
+  const corners = text.trim().replace(/['"]/g, "").split(";").filter((part) => part.trim()).map((part) => part.split(",").map((s) => Number(s.trim())));
+  if (corners.length < 3 || corners.length > 16) {
+    throw new Error(`--polygon needs 3 to 16 corners, got ${corners.length}`);
+  }
+  for (const corner of corners) {
+    const [lat, lng] = corner;
+    if (corner.length !== 2 || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw new Error(
+        `Wrong --polygon corner "${corner.join(",")}". Use --polygon=lat,lng;lat,lng;lat,lng`
+      );
+    }
+  }
+  return corners;
+}
+
 // src/index.ts
+var PROBE_STEP = 1e-4;
 var argv = yargs_default(hideBin(process.argv)).option("bbox", {
   type: "string",
   demandOption: true,
   describe: "Area to export, as --bbox=minLat,minLng,maxLat,maxLng"
+}).option("polygon", {
+  type: "string",
+  default: "",
+  describe: "Corners of a tilted area inside --bbox, as --polygon=lat,lng;lat,lng;... Only lattice points inside it (or within one step of its edge) are probed"
 }).option("level", {
   type: "number",
   default: 20,
@@ -14821,11 +14877,26 @@ async function bootstrap() {
   const { bbox } = parseBBox(argv.bbox);
   const maxLevel = Math.max(2, Math.min(21, Math.round(argv.level)));
   emit("start", { bbox: argv.bbox, level: maxLevel });
+  let include;
+  if (argv.polygon) {
+    const corners = parseCorners(argv.polygon);
+    include = makeAreaTest(corners, PROBE_STEP);
+    const [northEast, southWest] = bbox;
+    let inside = 0;
+    let total = 0;
+    for (let lat = southWest.latitude; lat <= northEast.latitude; lat += PROBE_STEP) {
+      for (let lon = southWest.longitude; lon <= northEast.longitude; lon += PROBE_STEP) {
+        total++;
+        if (include(lat, lon)) inside++;
+      }
+    }
+    emit("area", { corners: corners.length, probes: inside, skipped: total - inside });
+  }
   const app = new DumpObjApp();
   if (argv["texture-cache"]) {
     ObjWriter.textureCacheDir = String(argv["texture-cache"]);
   }
-  const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel);
+  const data = await CoordinatesToOctants.convertBbox(bbox, maxLevel, include);
   const levels = Object.keys(data).map(Number).filter((n2) => Number.isFinite(n2)).sort((a2, b2) => b2 - a2);
   if (levels.length === 0) {
     throw new Error(

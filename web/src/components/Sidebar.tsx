@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FolderPicker } from "./FolderPicker";
-import type { Bbox, ExportOptions, Instance, Job } from "../types";
+import type { Bbox, Corner, ExportOptions, Instance, Job } from "../types";
 import { instanceLabel } from "../types";
 import {
   bboxSize,
@@ -9,6 +9,8 @@ import {
   formatMetres,
   isEmpty,
 } from "../lib/geo";
+import { rectangleSize, tiltDegrees } from "../lib/area";
+import { isNewer } from "./VersionChip";
 import { Card, NumberField, Slider, Stat, Toggle } from "./ui";
 import { ProgressCard } from "./ProgressCard";
 
@@ -18,6 +20,8 @@ type Props = {
   onlineCount: number;
   hubConnected: boolean;
   bbox: Bbox | null;
+  /** Set when the area is tilted inside the bbox. */
+  corners: Corner[] | null;
   setBbox: (b: Bbox) => void;
   options: ExportOptions;
   setOptions: (patch: Partial<ExportOptions>) => void;
@@ -32,11 +36,26 @@ type Props = {
   onCancel: () => void;
 };
 
+/** The first add-on version that exports only the inside of a tilted area. */
+const MIN_TILTED_ADDON = "1.1.7";
+
 export function Sidebar(props: Props) {
-  const { bbox, options, setOptions, job, instance } = props;
-  const cost = estimateCost(bbox);
+  const { bbox, corners, options, setOptions, job, instance } = props;
+  // Before 1.1.7 the add-on drops the corners and exports the whole bbox.
+  const addonVersion = instance?.info?.addonVersion;
+  const oldAddon =
+    corners !== null &&
+    instance !== null &&
+    (!addonVersion || isNewer(MIN_TILTED_ADDON, addonVersion));
+  // So the estimate counts what will really be probed.
+  const cost = useMemo(
+    () => estimateCost(bbox, oldAddon ? null : corners),
+    [bbox, corners, oldAddon],
+  );
   const hasArea = bbox !== null && !isEmpty(bbox);
-  const size = hasArea ? bboxSize(bbox!) : null;
+  // A tilted area is measured along its own sides, not its bbox's.
+  const size = !hasArea ? null : corners ? rectangleSize(corners) : bboxSize(bbox!);
+  const tilt = corners ? tiltDegrees(corners) : 0;
   const [showFields, setShowFields] = useState(false);
   const [picking, setPicking] = useState(false);
 
@@ -97,6 +116,23 @@ export function Sidebar(props: Props) {
               />
             </div>
 
+            {corners && (
+              <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
+                Tilted {Math.abs(tilt).toFixed(1)}° from north-up, because it
+                was drawn on a rotated map. Only the inside of the tilted box is
+                downloaded.
+              </p>
+            )}
+
+            {oldAddon && (
+              <p className="mt-1.5 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-2.5 py-1.5 text-[11px] leading-snug text-[#f7d78a]">
+                This Blender's add-on is{" "}
+                {addonVersion ? `version ${addonVersion}` : "older than 1.1.7"},
+                so it will download the whole north-up box around this area.
+                Update the add-on to download only the tilted part.
+              </p>
+            )}
+
             {cost && (
               <div
                 className={`mt-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug ${
@@ -119,6 +155,13 @@ export function Sidebar(props: Props) {
             >
               {showFields ? "Hide coordinates" : "Fine-tune coordinates"}
             </button>
+
+            {showFields && corners && (
+              <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
+                These are the north-up box around the tilted area. Editing one
+                replaces the tilted area with that box.
+              </p>
+            )}
 
             {showFields && (
               <div className="mt-1.5 grid grid-cols-2 gap-1.5">

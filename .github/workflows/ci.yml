@@ -34,11 +34,11 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Location parser and map settings checks
+      - name: Location parser, map settings and tilted area checks
         working-directory: web
         run: |
           mkdir -p ../dist
-          for check in geo settings; do
+          for check in geo settings area; do
             npx esbuild src/lib/$check.check.ts --bundle --platform=node \
               --format=cjs --outfile=../dist/$check.check.cjs
             node ../dist/$check.check.cjs

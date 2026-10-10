@@ -18,11 +18,15 @@ export class CoordinatesToOctants {
     return await converter.convertLatLongToOctant(latitude, longitude, MAX_OCTANT_LEVEL);
   }
 
-  public static async convertBbox(bbox: GlobalBbox, maxLevel: number): Promise<FoundOctants> {
+  public static async convertBbox(
+    bbox: GlobalBbox,
+    maxLevel: number,
+    include?: (lat: number, lon: number) => boolean,
+  ): Promise<FoundOctants> {
     const serializedBbox: BBox = {
       northEast: { lat: bbox[0].latitude, lon: bbox[0].longitude },
       southWest: { lat: bbox[1].latitude, lon: bbox[1].longitude },
     };
-    return await converter.convertBBoxToOctants(serializedBbox, maxLevel);
+    return await converter.convertBBoxToOctants(serializedBbox, maxLevel, include);
   }
 }
