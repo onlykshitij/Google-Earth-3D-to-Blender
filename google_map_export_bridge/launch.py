@@ -13,7 +13,7 @@ import time
 
 import bpy
 
-from . import agent, connect, hub as hub_module, jobs, prefs
+from . import agent, connect, hub as hub_module, jobs, open_data, prefs
 
 # See PRACTICAL_MAX_LEVEL in obj_transform for why 20 and not 21.
 MAX_USEFUL_LEVEL = 20
@@ -58,6 +58,7 @@ def publish_info(context):
 
     if settings is not None:
         info["defaults"] = {
+            "source": settings.source,
             "level": settings.level,
             "levelGround": settings.level_ground,
             "groundCellSize": settings.ground_cell_size,
@@ -145,6 +146,13 @@ def build_params(context, bbox, options=None, polygon=None):
         "script_path": exporter_script(),
         "job_dir": job_dir,
         "bbox": bbox,
+        # "google", "osm" or "srtm". Unknown values are refused in start().
+        "source": str(_pick(options, "source", settings.source)),
+        # Chosen in the interface's Map settings; empty means the built-in list.
+        "overpass_url": str(_pick(options, "overpassUrl", "") or ""),
+        "srtm_url": str(_pick(options, "srtmUrl", "") or ""),
+        # Kept beside the download cache, so a tile is fetched once.
+        "srtm_cache": os.path.join(p.resolved_work_dir(), "srtm-cache"),
         # Corners of a tilted area inside the bbox, or None for the whole bbox.
         "polygon": polygon,
         # Clamped because the interface is not the only caller: the API
@@ -259,7 +267,11 @@ def start(context, bbox, options=None, polygon=None):
     if not os.access(destination, os.W_OK):
         return None, "The export folder %s is not writable." % destination
 
-    if not params["node_path"]:
+    if params["source"] not in ("google",) + open_data.SOURCES:
+        return None, "Unknown data source %r." % params["source"]
+
+    # Only the Google exporter runs on Node.js.
+    if params["source"] == "google" and not params["node_path"]:
         return None, ("Node.js was not found. Install it from nodejs.org, then "
                       "set the path in Preferences if it is still not picked up.")
 

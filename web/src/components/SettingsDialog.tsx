@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
 import type { MapSettings } from "../types";
-import { clean, DEFAULT_GEOCODER } from "../lib/settings";
+import {
+  clean,
+  DEFAULT_GEOCODER,
+  OVERPASS_SERVERS,
+  SRTM_SOURCES,
+} from "../lib/settings";
 import { isTileUrl } from "./MapCanvas";
 
 /** Show the end of a key, so it can be recognised without being read out. */
@@ -52,6 +57,76 @@ function Field({
 }
 
 /**
+ * Pick one of the built-in servers, or type another. An empty value means the
+ * hub's choice, or the built-in order when the hub has none.
+ */
+function ServerChoice({
+  label,
+  hint,
+  value,
+  onChange,
+  presets,
+  hubValue,
+  placeholder,
+  problem,
+}: {
+  label: string;
+  hint: ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  presets: { label: string; url: string }[];
+  hubValue: string | undefined;
+  placeholder: string;
+  problem: string | null;
+}) {
+  const known = (v: string) => !v || presets.some((p) => p.url === v);
+  const [custom, setCustom] = useState(!known(value));
+  const hubLabel = hubValue
+    ? `The hub's choice (${presets.find((p) => p.url === hubValue)?.label ?? hubValue})`
+    : `Automatic (${presets[0].label} first)`;
+
+  return (
+    <label className="block">
+      <span className="field-label">{label}</span>
+      <select
+        className="input mt-1"
+        value={custom ? "custom" : value}
+        onChange={(e) => {
+          const picked = e.target.value;
+          setCustom(picked === "custom");
+          onChange(picked === "custom" ? (known(value) ? "" : value) : picked);
+        }}
+      >
+        <option value="">{hubLabel}</option>
+        {presets.map((p) => (
+          <option key={p.url} value={p.url}>
+            {p.label}
+          </option>
+        ))}
+        <option value="custom">Another address…</option>
+      </select>
+      {custom && (
+        <input
+          className="input mt-1 font-mono text-[12px]"
+          value={value}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+      <span
+        className={`mt-1 block text-[11px] leading-snug ${
+          problem ? "text-[#f7d78a]" : "text-ink-400"
+        }`}
+      >
+        {problem ?? hint}
+      </span>
+    </label>
+  );
+}
+
+/**
  * Keys and addresses for the map and the search box.
  *
  * What is saved here stays in this browser and overrides the hub's own
@@ -75,6 +150,8 @@ export function SettingsDialog({
     tileUrl: local.tileUrl ?? "",
     tileAttribution: local.tileAttribution ?? "",
     geocoderUrl: local.geocoderUrl ?? "",
+    overpassUrl: local.overpassUrl ?? "",
+    srtmUrl: local.srtmUrl ?? "",
   });
   const firstField = useRef<HTMLInputElement>(null);
   // The app re-renders on every instance poll and passes a new onClose each
@@ -106,8 +183,18 @@ export function SettingsDialog({
       ? "Needs to start with https://."
       : null;
 
+  const httpProblem = (v: string) =>
+    v.trim() && !/^https?:\/\/\S+$/i.test(v.trim()) ? "Needs to start with https://." : null;
+  const overpassProblem = httpProblem(draft.overpassUrl);
+  const srtmProblem =
+    httpProblem(draft.srtmUrl) ??
+    (draft.srtmUrl.trim() && !draft.srtmUrl.includes("{tile}")
+      ? "Needs {tile} where the tile name goes."
+      : null);
+  const problems = Boolean(tileProblem || geocoderProblem || overpassProblem || srtmProblem);
+
   const save = () => {
-    if (tileProblem || geocoderProblem) return;
+    if (problems) return;
     onSave(clean(draft));
   };
 
@@ -136,7 +223,7 @@ export function SettingsDialog({
               Map settings
             </h2>
             <p className="text-[11px] text-ink-400">
-              Keys for map layers and search. Exports from Google Earth need none.
+              Keys and servers for the map, search and data sources. Exports need no key.
             </p>
           </div>
           <button
@@ -206,6 +293,28 @@ export function SettingsDialog({
             placeholder={hubSettings.geocoderUrl || DEFAULT_GEOCODER}
             hint="A Nominatim-compatible search, such as your own Nominatim or LocationIQ. {query} is replaced by what you type."
           />
+
+          <ServerChoice
+            label="OpenStreetMap buildings server"
+            value={draft.overpassUrl}
+            onChange={set("overpassUrl")}
+            presets={OVERPASS_SERVERS}
+            hubValue={hubSettings.overpassUrl}
+            placeholder="https://…/api/interpreter"
+            problem={overpassProblem}
+            hint="The Overpass server Blender asks for OSM buildings. If it is busy, the others are tried in turn."
+          />
+
+          <ServerChoice
+            label="SRTM terrain source"
+            value={draft.srtmUrl}
+            onChange={set("srtmUrl")}
+            presets={SRTM_SOURCES}
+            hubValue={hubSettings.srtmUrl}
+            placeholder="https://…/{tile}.hgt.zip"
+            problem={srtmProblem}
+            hint="Where Blender downloads elevation tiles; each is kept after the first download. If one has no tile, the other is tried. An address of your own uses {tile} (N43E010) and {lat} (N43)."
+          />
         </div>
 
         <div className="border-t border-white/8 p-3">
@@ -229,7 +338,7 @@ export function SettingsDialog({
             </button>
             <button
               type="submit"
-              disabled={Boolean(tileProblem || geocoderProblem)}
+              disabled={problems}
               className="btn-primary"
             >
               Save

@@ -84,6 +84,21 @@ permissive licence, and leaflet-rotate as above; see `web/package.json` and the
 generated lockfile. The hub and the add-on use only the Python standard library
 and Blender's `bpy`.
 
+### OpenStreetMap data — ODbL
+
+Building outlines and heights for the OSM buildings source are © OpenStreetMap
+contributors, available under the Open Database License
+(<https://www.openstreetmap.org/copyright>). They are fetched at export time
+from Overpass API servers and are not bundled. A model made from them is a
+produced work under the ODbL and must credit OpenStreetMap.
+
+### SRTM elevation — public domain
+
+The SRTM terrain source uses NASA's Shuttle Radar Topography Mission 1
+arc-second data (SRTMGL1, NASA/USGS), which is in the public domain. It is
+fetched at export time from ESA's STEP mirror or AWS Terrain Tiles and is not
+bundled.
+
 ---
 
 ## Not used here

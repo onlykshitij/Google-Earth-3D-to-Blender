@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bpy.props import (BoolProperty, FloatProperty, IntProperty,
+from bpy.props import (BoolProperty, EnumProperty, FloatProperty, IntProperty,
                        StringProperty)
 from bpy.types import PropertyGroup
 
@@ -30,6 +30,18 @@ class GMEB_Properties(PropertyGroup):
     )
 
     # --- export options ----------------------------------------------------
+    source: EnumProperty(
+        name="Source",
+        description="Where the 3D data comes from",
+        items=[
+            ("google", "Google Earth 3D", "Textured photogrammetry from Google Earth"),
+            ("osm", "OSM buildings", "OpenStreetMap building outlines, extruded to "
+                                     "their mapped heights with flat roofs"),
+            ("srtm", "SRTM terrain", "NASA SRTM elevation, about 30 m apart, "
+                                     "as a terrain mesh"),
+        ],
+        default="google",
+    )
     level: IntProperty(
         name="Detail",
         description="Maximum octant depth. 20 is as fine as this usefully goes; "

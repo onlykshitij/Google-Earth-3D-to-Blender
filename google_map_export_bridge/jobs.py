@@ -23,7 +23,7 @@ import threading
 import time
 import uuid
 
-from . import obj_transform
+from . import obj_transform, open_data
 
 # Phase names shared with the web interface. Keep in step with web/src/types.ts.
 PHASE_IDLE = "idle"
@@ -273,25 +273,17 @@ class JobManager:
 
     def _run(self, job):
         try:
-            out_dir = self._download(job)
-            if job.cancelled:
-                self._finish(job, PHASE_CANCELLED, "Cancelled")
-                return
-
-            if job.params.get("flatten_output"):
-                out_dir = self._flatten(job, out_dir)
-
-            with self._lock:
-                job.output_dir = out_dir
-
-            model = os.path.join(out_dir, "model.obj")
-            if not os.path.isfile(model):
-                raise RuntimeError(
-                    "The exporter finished but produced no model.obj. Google "
-                    "Earth may not have 3D coverage for that area.")
-
-            report = self._convert(job, model)
-            if job.cancelled:
+            if job.params.get("source") in open_data.SOURCES:
+                # Fetched and meshed in Python, already level and local.
+                report = open_data.export(job.params, lambda message, fraction: self._set(
+                    phase=(PHASE_DOWNLOADING if fraction < _DOWNLOAD_SHARE
+                           else PHASE_CONVERTING),
+                    message=message, progress=fraction))
+                with self._lock:
+                    job.output_dir = job.params["job_dir"]
+            else:
+                report = self._google(job)
+            if job.cancelled or report is None:
                 self._finish(job, PHASE_CANCELLED, "Cancelled")
                 return
 
@@ -307,6 +299,26 @@ class JobManager:
 
         except Exception as exc:                      # noqa: BLE001 - reported to UI
             self._fail(job, exc)
+
+    def _google(self, job):
+        """Download with the bundled exporter, then georeference. None if cancelled."""
+        out_dir = self._download(job)
+        if job.cancelled:
+            return None
+
+        if job.params.get("flatten_output"):
+            out_dir = self._flatten(job, out_dir)
+
+        with self._lock:
+            job.output_dir = out_dir
+
+        model = os.path.join(out_dir, "model.obj")
+        if not os.path.isfile(model):
+            raise RuntimeError(
+                "The exporter finished but produced no model.obj. Google "
+                "Earth may not have 3D coverage for that area.")
+
+        return self._convert(job, model)
 
     def _download(self, job):
         params = job.params

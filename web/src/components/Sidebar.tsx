@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { FolderPicker } from "./FolderPicker";
-import type { Bbox, Corner, ExportOptions, Instance, Job } from "../types";
+import type { Bbox, Corner, ExportOptions, Instance, Job, Source } from "../types";
 import { instanceLabel } from "../types";
 import {
   bboxSize,
@@ -36,21 +36,38 @@ type Props = {
   onCancel: () => void;
 };
 
-/** The first add-on version that exports only the inside of a tilted area. */
-const MIN_TILTED_ADDON = "1.1.7";
+const SOURCES: { key: Source; label: string; hint: string }[] = [
+  {
+    key: "google",
+    label: "Google Earth",
+    hint: "Textured photogrammetry, where Google has it.",
+  },
+  {
+    key: "osm",
+    label: "OSM buildings",
+    hint: "OpenStreetMap outlines raised to their mapped heights, with flat roofs and no textures. A building with no height or level count is 6 m tall. Data © OpenStreetMap contributors, ODbL.",
+  },
+  {
+    key: "srtm",
+    label: "SRTM terrain",
+    hint: "NASA elevation about 30 m apart, as one terrain mesh with no buildings. Covers 56°S to 60°N.",
+  },
+];
 
 export function Sidebar(props: Props) {
   const { bbox, corners, options, setOptions, job, instance } = props;
-  // Before 1.1.7 the add-on drops the corners and exports the whole bbox.
+  const google = options.source === "google";
   const addonVersion = instance?.info?.addonVersion;
-  const oldAddon =
-    corners !== null &&
-    instance !== null &&
-    (!addonVersion || isNewer(MIN_TILTED_ADDON, addonVersion));
-  // So the estimate counts what will really be probed.
+  const tooOld = (version: string) =>
+    instance !== null && (!addonVersion || isNewer(version, addonVersion));
+  // Before 1.1.7 the add-on drops the corners and exports the whole bbox, and
+  // before 1.1.8 it ignores the source and always uses Google Earth.
+  const oldAddon = corners !== null && tooOld("1.1.7");
+  const oldForSource = !google && tooOld("1.1.8");
+  // The probe count is the Google exporter's, so the estimate is too.
   const cost = useMemo(
-    () => estimateCost(bbox, oldAddon ? null : corners),
-    [bbox, corners, oldAddon],
+    () => (google ? estimateCost(bbox, oldAddon ? null : corners) : null),
+    [google, bbox, corners, oldAddon],
   );
   const hasArea = bbox !== null && !isEmpty(bbox);
   // A tilted area is measured along its own sides, not its bbox's.
@@ -119,8 +136,10 @@ export function Sidebar(props: Props) {
             {corners && (
               <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
                 Tilted {Math.abs(tilt).toFixed(1)}° from north-up, because it
-                was drawn on a rotated map. Only the inside of the tilted box is
-                downloaded.
+                was drawn on a rotated map.{" "}
+                {options.source === "srtm"
+                  ? "SRTM terrain covers the north-up box around it."
+                  : "Only the inside of the tilted box is downloaded."}
               </p>
             )}
 
@@ -191,41 +210,79 @@ export function Sidebar(props: Props) {
         )}
       </Card>
 
-      {/* --- detail -------------------------------------------------------- */}
-      <Card title="Detail">
-        <Slider
-          label="Octant level"
-          value={options.level}
-          onChange={(v) => setOptions({ level: v })}
-          min={14}
-          max={20}
-          format={(v) => `${v}`}
-        />
+      {/* --- source -------------------------------------------------------- */}
+      <Card title="Source">
+        <div className="flex gap-0.5 rounded-lg border border-white/8 bg-white/[0.03] p-0.5">
+          {SOURCES.map((src) => (
+            <button
+              key={src.key}
+              onClick={() => setOptions({ source: src.key })}
+              aria-pressed={options.source === src.key}
+              className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition ${
+                options.source === src.key
+                  ? "bg-accent/90 text-ink-950"
+                  : "text-ink-400 hover:bg-white/[0.06] hover:text-ink-200"
+              }`}
+            >
+              {src.label}
+            </button>
+          ))}
+        </div>
         <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
-          20 is Google's finest level in most cities. Each step down roughly
-          quarters the download and the vertex count.
+          {SOURCES.find((src) => src.key === options.source)?.hint}
         </p>
+        {oldForSource && (
+          <p className="mt-1.5 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-2.5 py-1.5 text-[11px] leading-snug text-[#f7d78a]">
+            This Blender's add-on is{" "}
+            {addonVersion ? `version ${addonVersion}` : "older than 1.1.8"},
+            which only exports from Google Earth and would ignore this choice.
+            Update the add-on to use other sources.
+          </p>
+        )}
       </Card>
+
+      {/* --- detail -------------------------------------------------------- */}
+      {google && (
+        <Card title="Detail">
+          <Slider
+            label="Octant level"
+            value={options.level}
+            onChange={(v) => setOptions({ level: v })}
+            min={14}
+            max={20}
+            format={(v) => `${v}`}
+          />
+          <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
+            20 is Google's finest level in most cities. Each step down roughly
+            quarters the download and the vertex count.
+          </p>
+        </Card>
+      )}
 
       {/* --- orientation --------------------------------------------------- */}
       <Card title="Orientation">
-        <Toggle
-          label="Level the ground"
-          hint="Rotate the fitted ground plane flat and sit it at Z=0. Terrain relief is kept; only the overall tilt is removed."
-          checked={options.levelGround}
-          onChange={(v) => setOptions({ levelGround: v })}
-        />
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <NumberField
-            label="Ground cell"
-            value={options.groundCellSize}
-            onChange={(v) => setOptions({ groundCellSize: v })}
-            step={0.5}
-            min={0.5}
-            max={50}
-            suffix="m"
-            disabled={!options.levelGround}
+        {/* OSM and SRTM are built level, so only Google needs levelling. */}
+        {google && (
+          <Toggle
+            label="Level the ground"
+            hint="Rotate the fitted ground plane flat and sit it at Z=0. Terrain relief is kept; only the overall tilt is removed."
+            checked={options.levelGround}
+            onChange={(v) => setOptions({ levelGround: v })}
           />
+        )}
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          {google && (
+            <NumberField
+              label="Ground cell"
+              value={options.groundCellSize}
+              onChange={(v) => setOptions({ groundCellSize: v })}
+              step={0.5}
+              min={0.5}
+              max={50}
+              suffix="m"
+              disabled={!options.levelGround}
+            />
+          )}
           <NumberField
             label="Unit scale"
             value={options.scale}
@@ -239,27 +296,29 @@ export function Sidebar(props: Props) {
           Z-up with +Y pointing north.
         </p>
 
-        <div className="mt-2 border-t border-white/8 pt-1.5">
-          <Toggle
-            label="Trim below ground"
-            hint="Google's tiles include a flat sheet tens of metres under the terrain. This drops it - along with any genuinely sunken ground."
-            checked={options.trimSubGround}
-            onChange={(v) => setOptions({ trimSubGround: v })}
-            disabled={!options.levelGround}
-          />
-          {options.trimSubGround && options.levelGround && (
-            <div className="mt-1 w-1/2">
-              <NumberField
-                label="Cut depth"
-                value={options.trimDepth}
-                onChange={(v) => setOptions({ trimDepth: v })}
-                step={0.5}
-                min={0.1}
-                suffix="m"
-              />
-            </div>
-          )}
-        </div>
+        {google && (
+          <div className="mt-2 border-t border-white/8 pt-1.5">
+            <Toggle
+              label="Trim below ground"
+              hint="Google's tiles include a flat sheet tens of metres under the terrain. This drops it - along with any genuinely sunken ground."
+              checked={options.trimSubGround}
+              onChange={(v) => setOptions({ trimSubGround: v })}
+              disabled={!options.levelGround}
+            />
+            {options.trimSubGround && options.levelGround && (
+              <div className="mt-1 w-1/2">
+                <NumberField
+                  label="Cut depth"
+                  value={options.trimDepth}
+                  onChange={(v) => setOptions({ trimDepth: v })}
+                  step={0.5}
+                  min={0.1}
+                  suffix="m"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* --- files --------------------------------------------------------- */}

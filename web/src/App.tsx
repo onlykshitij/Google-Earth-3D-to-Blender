@@ -27,6 +27,7 @@ import { envelope, isTilted, roundCorners } from "./lib/area";
 import * as settings from "./lib/settings";
 
 const DEFAULT_OPTIONS: ExportOptions = {
+  source: "google",
   level: 20,
   levelGround: true,
   groundCellSize: 4,
@@ -162,11 +163,18 @@ export default function App() {
   }, [selected]);
 
   // --- actions -------------------------------------------------------------
+  // Blender fetches OSM and SRTM itself, so it needs the servers chosen here.
+  const withServers = (o: ExportOptions): ExportOptions => ({
+    ...o,
+    overpassUrl: mapSettings.overpassUrl,
+    srtmUrl: mapSettings.srtmUrl,
+  });
+
   const handleExport = async () => {
     if (!session || !selected || !bbox || isEmpty(bbox)) return;
     setError(null);
     try {
-      await api.startExport(session.token, selected.id, bbox, options, corners);
+      await api.startExport(session.token, selected.id, bbox, withServers(options), corners);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -176,7 +184,7 @@ export default function App() {
     if (!session || !selected) return;
     setError(null);
     try {
-      await api.retryExport(session.token, selected.id, options);
+      await api.retryExport(session.token, selected.id, withServers(options));
     } catch (err) {
       setError((err as Error).message);
     }

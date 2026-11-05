@@ -259,6 +259,7 @@ Put the same value in each add-on's **Hub Token** preference, and set
 | `GMEB_AGENT_TOKEN` | shared secret Blender must present |
 | `GMEB_NO_BROWSER` | `1` to not open a browser |
 | `GMEB_CARTO_KEY`, `GMEB_TILE_URL`, `GMEB_TILE_ATTRIBUTION`, `GMEB_GEOCODER_URL` | map keys and addresses, see [Map layers, search and keys](#map-layers-search-and-keys) |
+| `GMEB_OVERPASS_URL`, `GMEB_SRTM_URL` | default servers for OSM buildings and SRTM terrain, see [Other sources](#other-sources-osm-buildings-and-srtm-terrain) |
 
 To build from this checkout instead of pulling, uncomment `build: .` in
 `docker-compose.yml` and run `docker compose up -d --build`.
@@ -353,6 +354,8 @@ There are two places to put a key:
 | `GMEB_TILE_URL` | `--tile-url` | an extra XYZ layer, shown as **Custom**, for example `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=KEY` |
 | `GMEB_TILE_ATTRIBUTION` | `--tile-attribution` | the credit that layer's provider asks for, shown as plain text |
 | `GMEB_GEOCODER_URL` | `--geocoder-url` | a Nominatim-compatible search address, with `{query}` where the search text goes |
+| `GMEB_OVERPASS_URL` | | the Overpass server for OSM buildings, tried before the built-in ones |
+| `GMEB_SRTM_URL` | | the address of SRTM tiles, with `{tile}` and `{lat}`, tried before the built-in ones |
 
 These keys are browser keys. Anyone who can open the interface can read them,
 from the page or from the tile requests it makes. Put only keys meant for
@@ -385,6 +388,51 @@ cannot nudge it while modelling against it.
 > Shortened Maps links (`maps.app.goo.gl/…`) carry no coordinates — they only
 > appear after a redirect the browser cannot follow. Open the link in Google Maps
 > and copy the full URL instead.
+
+### Other sources: OSM buildings and SRTM terrain
+
+The **Source** card picks where the 3D data comes from:
+
+| Source | What arrives in Blender | Needs |
+| --- | --- | --- |
+| Google Earth | textured photogrammetry, as above | Node.js |
+| OSM buildings | one object per OpenStreetMap building: its outline raised to its mapped height, with a flat roof and no texture | nothing extra |
+| SRTM terrain | one terrain mesh from NASA's SRTM elevation, about 30 m between points | nothing extra |
+
+Both new sources are fetched by Blender itself, need no key, and arrive level
+with +Y north like the Google model, so the levelling options are hidden for
+them.
+
+**OSM buildings** take their height from the `height` tag, then from
+`building:levels` (and `roof:levels`) at 3 m a level. A building with neither
+is 6 m tall, and the export report says how many those were. Courtyards mapped
+as inner rings stay open. A tilted area is asked for as that polygon, so only
+the buildings inside it come back. Building parts (`building:part`) and
+`min_height` are not used, so overhangs and bridges come out as solid blocks.
+OSM data is © OpenStreetMap contributors under the
+[ODbL](https://www.openstreetmap.org/copyright): credit it wherever you use the
+model.
+
+**SRTM terrain** covers 56°S to 60°N. Z=0 is the lowest point in the area, and
+the report gives its height above sea level. Sea has no tiles and comes out at
+sea level; points SRTM has no data for sit at the lowest height. A tilted area
+gets the terrain of the north-up box around it. Tiles are cached beside the
+download cache, so an area is downloaded once. Very large areas are thinned to
+a million points.
+
+The two sources do not combine: OSM buildings stand on a flat Z=0, not on the
+terrain.
+
+**Servers.** OSM buildings come from public
+[Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) servers, which are
+often at capacity. Under **Map settings** (the gear button) you can pick which
+one is asked first, or type another address. If it is busy or times out, the
+others are tried in turn, and the error lists what each one said. SRTM tiles
+come from ESA's STEP server or AWS Terrain Tiles, picked the same way. The hub
+can set the defaults with `GMEB_OVERPASS_URL` and `GMEB_SRTM_URL`.
+
+These sources need add-on 1.1.8 or newer. An older add-on ignores the choice
+and exports from Google Earth, and the panel warns when that will happen.
 
 ### Rotating the map
 
@@ -648,6 +696,7 @@ Two details worth knowing if you touch this:
 
 | Option | Default | What it does |
 | --- | --- | --- |
+| Source | Google Earth | Google Earth 3D, OSM buildings or SRTM terrain — see [Other sources](#other-sources-osm-buildings-and-srtm-terrain). |
 | Octant level | 20 | Detail, capped at 20 — see below. Each step down roughly quarters the download. |
 | Level the ground | on | Fit the ground plane, rotate it flat, sit it at `Z = 0`. |
 | Ground cell | 4 m | Grid used to sample ground height. Larger is more robust on cluttered sites; smaller follows narrow streets. |

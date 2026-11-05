@@ -36,7 +36,7 @@ bl_info = {
     "description": "Import Google Earth 3D areas as oriented, levelled "
                    "modelling references",
     "author": "Sentics",
-    "version": (1, 1, 7),
+    "version": (1, 1, 8),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Map Export",
     "category": "Import-Export",

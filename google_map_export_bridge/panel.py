@@ -111,6 +111,12 @@ class GMEB_PT_main(_Base, Panel):
                             icon="ERROR")
                         for line in _wrap(r.coverage_note, 34):
                             warn.label(text=line)
+                    elif r.coverage_note:
+                        # OSM and SRTM notes: guessed heights, sea level.
+                        note = box.column(align=True)
+                        note.scale_y = 0.8
+                        for line in _wrap(r.coverage_note, 34):
+                            note.label(text=line)
 
         layout.separator()
         col = layout.column(align=True)
@@ -144,7 +150,9 @@ class GMEB_PT_area(_Base, Panel):
             if width * height > 1_000_000:
                 box.label(text="Large area - slow download", icon="ERROR")
 
-        layout.prop(settings, "level")
+        layout.prop(settings, "source")
+        if settings.source == "google":
+            layout.prop(settings, "level")
 
 
 class GMEB_PT_orientation(_Base, Panel):

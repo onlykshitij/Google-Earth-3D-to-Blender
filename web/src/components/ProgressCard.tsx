@@ -4,7 +4,7 @@ import { Stat } from "./ui";
 
 const PHASE_LABEL: Record<string, string> = {
   queued: "Queued",
-  downloading: "Downloading tiles",
+  downloading: "Downloading",
   converting: "Georeferencing",
   importing: "Importing into Blender",
   done: "Done",
@@ -182,11 +182,20 @@ export function ProgressCard({
             />
           </div>
 
-          <p className="mt-2 text-[11px] leading-snug text-ink-400">
-            Ground fitted from {job.model.groundInliers} of{" "}
-            {job.model.groundCells} cells, {job.model.groundRms.toFixed(2)} m
-            rms. Lower rms means a more confident level.
-          </p>
+          {job.model.groundCells > 0 && (
+            <p className="mt-2 text-[11px] leading-snug text-ink-400">
+              Ground fitted from {job.model.groundInliers} of{" "}
+              {job.model.groundCells} cells, {job.model.groundRms.toFixed(2)} m
+              rms. Lower rms means a more confident level.
+            </p>
+          )}
+
+          {/* OSM and SRTM explain themselves here: guessed heights, sea level. */}
+          {job.model.coverage === "3d" && job.model.coverageNote && (
+            <p className="mt-2 text-[11px] leading-snug text-ink-400">
+              {job.model.coverageNote}
+            </p>
+          )}
 
           {job.outputDir && (
             <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-1.5">

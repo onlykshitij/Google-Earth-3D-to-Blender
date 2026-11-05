@@ -24,6 +24,8 @@ expect("hub values apply when the browser has none", effective(hub, {}), {
   tileUrl: "",
   tileAttribution: "",
   geocoderUrl: "https://hub.example/?q={query}",
+  overpassUrl: "",
+  srtmUrl: "",
 });
 expect(
   "a browser value beats the hub's",

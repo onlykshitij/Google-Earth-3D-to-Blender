@@ -49,3 +49,7 @@ services:
       GMEB_TILE_ATTRIBUTION: "${GMEB_TILE_ATTRIBUTION:-}"
       # A Nominatim-compatible search. {query} is replaced by the search text.
       GMEB_GEOCODER_URL: "${GMEB_GEOCODER_URL:-}"
+      # Default servers for the OSM buildings and SRTM terrain sources. Empty
+      # uses the built-in list; each browser can pick under Map settings.
+      GMEB_OVERPASS_URL: "${GMEB_OVERPASS_URL:-}"
+      GMEB_SRTM_URL: "${GMEB_SRTM_URL:-}"

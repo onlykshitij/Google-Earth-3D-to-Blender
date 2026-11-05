@@ -33,7 +33,7 @@ SERVICE_NAME = "google-map-export-bridge"
 PROTOCOL_VERSION = 1
 
 # Kept in step with bl_info in __init__.py; build.py fails if they drift.
-VERSION = "1.1.7"
+VERSION = "1.1.8"
 
 DEFAULT_PORT = 8777
 
@@ -70,6 +70,8 @@ MAP_SETTINGS_ENV = {
     "tileUrl": "GMEB_TILE_URL",
     "tileAttribution": "GMEB_TILE_ATTRIBUTION",
     "geocoderUrl": "GMEB_GEOCODER_URL",
+    "overpassUrl": "GMEB_OVERPASS_URL",
+    "srtmUrl": "GMEB_SRTM_URL",
 }
 
 

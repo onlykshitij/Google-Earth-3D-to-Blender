@@ -222,6 +222,7 @@ def main(argv=None):
     web_dir = resolve_web_dir(args.web_dir, args.build)
 
     map_settings = {
+        **env_maps,
         "cartoKey": args.carto_key,
         "tileUrl": args.tile_url,
         "tileAttribution": args.tile_attribution,

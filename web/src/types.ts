@@ -68,7 +68,11 @@ export type Job = {
   model?: ModelReport;
 };
 
+/** Where the 3D data comes from. Keep in step with SOURCES in open_data.py. */
+export type Source = "google" | "osm" | "srtm";
+
 export type ExportOptions = {
+  source: Source;
   level: number;
   levelGround: boolean;
   groundCellSize: number;
@@ -83,6 +87,9 @@ export type ExportOptions = {
   trimDepth: number;
   /** Folder on the Blender machine to download into and import from. */
   exportDir: string;
+  /** From Map settings, added when exporting. */
+  overpassUrl?: string;
+  srtmUrl?: string;
 };
 
 /** What a Blender session reports about itself. */
@@ -138,6 +145,10 @@ export type MapSettings = {
   tileAttribution: string;
   /** Nominatim-compatible search address, with {query} for the search text. */
   geocoderUrl: string;
+  /** Overpass server for OSM buildings. Empty means the built-in list. */
+  overpassUrl: string;
+  /** SRTM tile address with {tile} and {lat}. Empty means the built-in list. */
+  srtmUrl: string;
 };
 
 export type Session = {

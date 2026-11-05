@@ -386,6 +386,41 @@ check("tilted area imported",
       tilted_coll is not None
       and any(o.type == "MESH" for o in tilted_coll.objects))
 
+# --- OpenStreetMap buildings and SRTM terrain ---------------------------------
+# Both come from public servers, which can be busy; a failure names them.
+OPEN_BBOX = {"minLat": 43.7220, "minLng": 10.3940, "maxLat": 43.7240, "maxLng": 10.3975}
+for source, name in (("osm", "E2E osm"), ("srtm", "E2E srtm")):
+    previous = jobs.MANAGER.job
+    idle_by = time.time() + 15
+    while time.time() < idle_by:
+        mod._tick()
+        me = [i for i in get("/api/instances")["instances"] if i["id"] == instance_id]
+        if me and not (me[0].get("state") or {}).get("busy"):
+            break
+        time.sleep(0.25)
+    status, resp = post("/api/export", {
+        "token": session["token"], "instanceId": instance_id, "bbox": OPEN_BBOX,
+        "options": {"source": source, "collectionName": name}})
+    check("%s export accepted" % source, status == 200, resp)
+    if status == 200:
+        wait_for_job(previous)
+    done = jobs.MANAGER.job
+    check("%s export completed" % source,
+          done is not previous and done.phase == jobs.PHASE_DONE,
+          done.error if done else "no job")
+    coll = bpy.data.collections.get(name)
+    meshes = [o for o in (coll.objects if coll else []) if o.type == "MESH"]
+    check("%s imported" % source, bool(meshes), "%d objects" % len(meshes))
+    if source == "osm":
+        check("one object per building", len(meshes) > 5, len(meshes))
+        check("buildings stand on Z=0",
+              min(min((o.matrix_world @ v.co).z for v in o.data.vertices)
+                  for o in meshes) == 0.0)
+    elif meshes:
+        zs = [(meshes[0].matrix_world @ v.co).z for v in meshes[0].data.vertices]
+        check("terrain is lowest at Z=0 and has relief", min(zs) == 0.0 and max(zs) > 1,
+              "%.1f..%.1f m" % (min(zs), max(zs)))
+
 # --- the update button must not take Blender down with it --------------------
 # Installing an extension while a Python operator is still on the stack crashes
 # Blender with an access violation, so the operator only schedules the install.

@@ -30,6 +30,9 @@ jobs:
       - name: Hub routing and guards
         run: python tests/test_hub.py
 
+      - name: OpenStreetMap and SRTM sources
+        run: python tests/test_open_data.py
+
       - name: Install interface dependencies
         working-directory: web
         run: npm ci

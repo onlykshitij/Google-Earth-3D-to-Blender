@@ -12,6 +12,8 @@ export const SETTING_NAMES: (keyof MapSettings)[] = [
   "tileUrl",
   "tileAttribution",
   "geocoderUrl",
+  "overpassUrl",
+  "srtmUrl",
 ];
 
 export const EMPTY_SETTINGS: MapSettings = {
@@ -19,7 +21,26 @@ export const EMPTY_SETTINGS: MapSettings = {
   tileUrl: "",
   tileAttribution: "",
   geocoderUrl: "",
+  overpassUrl: "",
+  srtmUrl: "",
 };
+
+/**
+ * Where Blender fetches OpenStreetMap buildings and SRTM terrain. The chosen
+ * one is tried first, then the rest in this order. Kept in step with
+ * OVERPASS_SERVERS and SRTM_SOURCES in google_map_export_bridge/open_data.py.
+ */
+export const OVERPASS_SERVERS = [
+  { label: "overpass-api.de (main)", url: "https://overpass-api.de/api/interpreter" },
+  { label: "VK Maps mirror", url: "https://maps.mail.ru/osm/tools/overpass/api/interpreter" },
+  { label: "Kumi Systems mirror", url: "https://overpass.kumi.systems/api/interpreter" },
+  { label: "private.coffee mirror", url: "https://overpass.private.coffee/api/interpreter" },
+];
+
+export const SRTM_SOURCES = [
+  { label: "ESA STEP", url: "https://step.esa.int/auxdata/dem/SRTMGL1/{tile}.SRTMGL1.hgt.zip" },
+  { label: "AWS Terrain Tiles", url: "https://s3.amazonaws.com/elevation-tiles-prod/skadi/{lat}/{tile}.hgt.gz" },
+];
 
 /** The public Nominatim instance. Its usage policy allows light, manual use. */
 export const DEFAULT_GEOCODER =
