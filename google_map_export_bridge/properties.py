@@ -42,6 +42,24 @@ class GMEB_Properties(PropertyGroup):
         ],
         default="google",
     )
+    srtm_sea_level: BoolProperty(
+        name="Heights From Sea Level",
+        description="Make Z the height above sea level. Off puts the lowest "
+                    "point of the area at Z=0",
+        default=False,
+    )
+    srtm_smooth: BoolProperty(
+        name="Smooth Between Points",
+        description="Blend the four nearest SRTM points instead of taking the "
+                    "nearest one, which removes the one-metre steps",
+        default=False,
+    )
+    srtm_curvature: BoolProperty(
+        name="Earth Curvature",
+        description="Let the ground fall away from the centre as the Earth "
+                    "curves: about 2 m at 5 km, 31 m at 20 km",
+        default=False,
+    )
     level: IntProperty(
         name="Detail",
         description="Maximum octant depth. 20 is as fine as this usefully goes; "

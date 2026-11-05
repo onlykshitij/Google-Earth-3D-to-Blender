@@ -400,7 +400,9 @@ for source, name in (("osm", "E2E osm"), ("srtm", "E2E srtm")):
         time.sleep(0.25)
     status, resp = post("/api/export", {
         "token": session["token"], "instanceId": instance_id, "bbox": OPEN_BBOX,
-        "options": {"source": source, "collectionName": name}})
+        "options": {"source": source, "collectionName": name,
+                    "srtmSeaLevel": True, "srtmSmooth": True,
+                    "srtmCurvature": True}})
     check("%s export accepted" % source, status == 200, resp)
     if status == 200:
         wait_for_job(previous)
@@ -418,8 +420,14 @@ for source, name in (("osm", "E2E osm"), ("srtm", "E2E srtm")):
                   for o in meshes) == 0.0)
     elif meshes:
         zs = [(meshes[0].matrix_world @ v.co).z for v in meshes[0].data.vertices]
-        check("terrain is lowest at Z=0 and has relief", min(zs) == 0.0 and max(zs) > 1,
+        # Sea-level heights, so the lowest point is not pinned to zero.
+        check("terrain has sea-level heights and relief", min(zs) != 0.0 and max(zs) > 1,
               "%.1f..%.1f m" % (min(zs), max(zs)))
+        check("the SRTM options reached the job",
+              done.params.get("srtm_sea_level") and done.params.get("srtm_smooth")
+              and done.params.get("srtm_curvature"))
+        check("the report names them", "smoothed" in done.report.coverage_note
+              and "curvature" in done.report.coverage_note, done.report.coverage_note)
 
 # --- the update button must not take Blender down with it --------------------
 # Installing an extension while a Python operator is still on the stack crashes

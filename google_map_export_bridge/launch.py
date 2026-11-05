@@ -59,6 +59,9 @@ def publish_info(context):
     if settings is not None:
         info["defaults"] = {
             "source": settings.source,
+            "srtmSeaLevel": settings.srtm_sea_level,
+            "srtmSmooth": settings.srtm_smooth,
+            "srtmCurvature": settings.srtm_curvature,
             "level": settings.level,
             "levelGround": settings.level_ground,
             "groundCellSize": settings.ground_cell_size,
@@ -153,6 +156,9 @@ def build_params(context, bbox, options=None, polygon=None):
         "srtm_url": str(_pick(options, "srtmUrl", "") or ""),
         # Kept beside the download cache, so a tile is fetched once.
         "srtm_cache": os.path.join(p.resolved_work_dir(), "srtm-cache"),
+        "srtm_sea_level": bool(_pick(options, "srtmSeaLevel", settings.srtm_sea_level)),
+        "srtm_smooth": bool(_pick(options, "srtmSmooth", settings.srtm_smooth)),
+        "srtm_curvature": bool(_pick(options, "srtmCurvature", settings.srtm_curvature)),
         # Corners of a tilted area inside the bbox, or None for the whole bbox.
         "polygon": polygon,
         # Clamped because the interface is not the only caller: the API

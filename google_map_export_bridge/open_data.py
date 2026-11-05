@@ -57,6 +57,8 @@ DEFAULT_HEIGHT_M = 6.0
 # Terrain is thinned past this so a huge area stays importable.
 MAX_TERRAIN_VERTS = 1_000_000
 SRTM_VOID = -32768
+# Mean radius of the Earth, for the curvature option.
+EARTH_RADIUS_M = 6_371_000.0
 
 
 # --- shared -------------------------------------------------------------------
@@ -410,6 +412,31 @@ def load_tile(name, chosen, cache_dir, progress):
     return None
 
 
+def sample(tile, ty, tx, lat, lng, smooth):
+    """
+    Height at (lat, lng) from one tile, or None where SRTM has no data.
+
+    `smooth` blends the four surrounding points; otherwise the nearest point is
+    taken. Next to a missing point, smoothing falls back to the nearest one.
+    """
+    size, grid = tile
+    fr = (ty + 1 - lat) * (size - 1)
+    fc = (lng - tx) * (size - 1)
+    nearest = grid[round(fr) * size + round(fc)]
+    nearest = None if nearest == SRTM_VOID else nearest
+    if not smooth:
+        return nearest
+    r0, c0 = min(int(fr), size - 1), min(int(fc), size - 1)
+    r1, c1 = min(r0 + 1, size - 1), min(c0 + 1, size - 1)
+    q = (grid[r0 * size + c0], grid[r0 * size + c1],
+         grid[r1 * size + c0], grid[r1 * size + c1])
+    if SRTM_VOID in q:
+        return nearest
+    dr, dc = fr - r0, fc - c0
+    return ((q[0] * (1 - dc) + q[1] * dc) * (1 - dr)
+            + (q[2] * (1 - dc) + q[3] * dc) * dr)
+
+
 def srtm_export(params, path, progress):
     bbox = params["bbox"]
     frame = Frame(bbox, params.get("scale", 1.0))
@@ -437,42 +464,54 @@ def srtm_export(params, path, progress):
     step *= max(1, math.ceil(math.sqrt(rows * cols / MAX_TERRAIN_VERTS)))
     rows, cols = span(step)
 
+    smooth = bool(params.get("srtm_smooth"))
+    curvature = bool(params.get("srtm_curvature"))
+    sea_level = bool(params.get("srtm_sea_level"))
+
     progress("Sampling %d x %d terrain points..." % (cols, rows), 0.75)
-    heights, voids = [], 0
+    points, voids, max_drop = [], 0, 0.0
     for r in range(rows):
         lat = min(lat1, lat0 + r * step)
         for c in range(cols):
             lng = min(lng1, lng0 + c * step)
             ty, tx = math.floor(lat), math.floor(lng)
             tile = tiles.get((ty, tx))
-            if tile is None:
-                heights.append(0)       # sea level where there is no tile
-                continue
-            size, grid = tile
-            row = round((ty + 1 - lat) * (size - 1))
-            col = round((lng - tx) * (size - 1))
-            h = grid[row * size + col]
-            if h == SRTM_VOID:
+            # Sea level where there is no tile.
+            h = 0 if tile is None else sample(tile, ty, tx, lat, lng, smooth)
+            x, y = frame.xy(lat, lng)
+            if h is None:
                 voids += 1
-                h = None
-            heights.append(h)
+            elif curvature:
+                # Height below the plane touching the Earth at the centre.
+                drop = ((x * x + y * y) / (frame.scale * frame.scale)
+                        / (2 * EARTH_RADIUS_M))
+                max_drop = max(max_drop, drop)
+                h -= drop
+            points.append((x, y, h))
 
-    valid = [h for h in heights if h is not None]
-    floor = min(valid) if valid else 0
-    verts = []
-    for r in range(rows):
-        lat = min(lat1, lat0 + r * step)
-        for c in range(cols):
-            x, y = frame.xy(lat, min(lng1, lng0 + c * step))
-            h = heights[r * cols + c]
-            verts.append((x, y, ((floor if h is None else h) - floor) * frame.scale))
+    valid = [h for _, _, h in points if h is not None]
+    lowest = min(valid) if valid else 0
+    floor = 0 if sea_level else lowest
+    verts = [(x, y, ((lowest if h is None else h) - floor) * frame.scale)
+             for x, y, h in points]
     faces = [(r * cols + c, r * cols + c + 1, (r + 1) * cols + c + 1, (r + 1) * cols + c)
              for r in range(rows - 1) for c in range(cols - 1)]
 
     progress("Writing terrain...", 0.85)
     _write_obj(path, [("srtm_terrain", verts, faces)])
-    note = ("SRTM terrain at %.0f m spacing. Z=0 is %d m %s sea level."
-            % (step * METRES_PER_DEGREE, abs(floor), "below" if floor < 0 else "above"))
+    note = "SRTM terrain at %.0f m spacing, %s." % (
+        step * METRES_PER_DEGREE,
+        "smoothed between points" if smooth else "nearest point")
+    if sea_level:
+        note += " Z is the height above sea level"
+    else:
+        note += " Z=0 is %.0f m %s sea level" % (abs(floor), "below" if floor < 0
+                                                 else "above")
+    if curvature:
+        note += (" at the centre, and the ground falls away with the Earth's "
+                 "curvature, by up to %.1f m at the edges." % max_drop)
+    else:
+        note += "."
     if voids:
         note += " %d points had no data and sit at the lowest height." % voids
     return _report(path, frame, verts, note)

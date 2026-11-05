@@ -73,6 +73,12 @@ export type Source = "google" | "osm" | "srtm";
 
 export type ExportOptions = {
   source: Source;
+  /** SRTM only: Z is the height above sea level, not above the lowest point. */
+  srtmSeaLevel: boolean;
+  /** SRTM only: blend the four nearest points instead of taking the nearest. */
+  srtmSmooth: boolean;
+  /** SRTM only: the ground falls away from the centre with the Earth's curve. */
+  srtmCurvature: boolean;
   level: number;
   levelGround: boolean;
   groundCellSize: number;

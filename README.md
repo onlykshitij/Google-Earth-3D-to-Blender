@@ -420,8 +420,21 @@ OSM data is © OpenStreetMap contributors under the
 [ODbL](https://www.openstreetmap.org/copyright): credit it wherever you use the
 model.
 
-**SRTM terrain** covers 56°S to 60°N. Z=0 is the lowest point in the area, and
-the report gives its height above sea level. Sea has no tiles and comes out at
+**SRTM terrain** covers 56°S to 60°N. Heights are real metres with no
+exaggeration. SRTM measures the top surface, trees and roofs included, to within
+several metres, with points about 30 m apart, so narrow peaks and ridges come out
+softened. By default Z=0 is the lowest point in the area, and the report gives
+its height above sea level. Three options, all off by default, bring it closer
+to the true ground:
+
+| Option | Effect |
+| --- | --- |
+| Heights from sea level | Z is the height above sea level, rather than above the lowest point |
+| Smooth between points | blends the four nearest SRTM points instead of taking the nearest, removing the one-metre steps |
+| Earth curvature | the ground falls away from the centre as the Earth curves, by d²/2R: about 2 m at 5 km and 31 m at 20 km |
+
+The mesh is otherwise built on a flat plane, about 0.15% stretched horizontally
+by the conversion from degrees. Sea has no tiles and comes out at
 sea level; points SRTM has no data for sit at the lowest height. A tilted area
 gets the terrain of the north-up box around it. Tiles are cached beside the
 download cache, so an area is downloaded once. Very large areas are thinned to

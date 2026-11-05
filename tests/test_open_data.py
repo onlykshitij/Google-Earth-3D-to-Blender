@@ -233,6 +233,52 @@ check("terrain is one object of quads",
       obj.count("o srtm_terrain") == 1 and all(len(l.split()) == 5 for l in obj.splitlines()
                                                if l.startswith("f ")))
 
+# --- SRTM options ---------------------------------------------------------------
+print("\n--- SRTM options ---")
+od.load_tile = lambda name, *a: (SIZE, od.parse_hgt(tile_bytes())[1])
+
+
+def terrain(**options):
+    r = od.export(dict({"source": "srtm", "bbox": srtm_box, "job_dir": TMP}, **options), quiet)
+    zs = {}
+    for line in open(r.output_path):
+        if line.startswith("v "):
+            x, y, z = map(float, line.split()[1:])
+            zs[(round(x), round(y))] = z
+    return r, zs
+
+
+plain, plain_z = terrain()
+sea, sea_z = terrain(srtm_sea_level=True)
+check("sea level: Z is the height above sea level",
+      sea.min_z_m == 40 and sea.max_z_m == 60 and "height above sea level" in sea.coverage_note,
+      (sea.min_z_m, sea.max_z_m))
+check("sea level: only the datum moves", all(sea_z[k] - plain_z[k] == 40 for k in plain_z))
+
+smooth, smooth_z = terrain(srtm_smooth=True)
+steps = {round(z, 3) for z in smooth_z.values()}
+check("smoothing blends between points", any(z % 10 for z in steps) and len(steps) > 3,
+      sorted(steps)[:6])
+check("smoothing keeps the height range",
+      abs(smooth.min_z_m) < 1e-6 and abs(smooth.max_z_m - 20) < 1e-6,
+      (smooth.min_z_m, smooth.max_z_m))
+check("smoothing is named in the report", "smoothed" in smooth.coverage_note)
+
+curved, curved_z = terrain(srtm_curvature=True, srtm_sea_level=True)
+corner = max(plain_z, key=lambda k: k[0] ** 2 + k[1] ** 2)
+want = (corner[0] ** 2 + corner[1] ** 2) / (2 * od.EARTH_RADIUS_M)
+centre = min(plain_z, key=lambda k: k[0] ** 2 + k[1] ** 2)
+check("curvature: a corner drops by d squared over 2R",
+      abs((sea_z[corner] - curved_z[corner]) - want) < 0.5,
+      "%.1f m, expected %.1f" % (sea_z[corner] - curved_z[corner], want))
+check("curvature: the centre does not move", abs(sea_z[centre] - curved_z[centre]) < 0.01)
+check("curvature: the report gives the largest drop",
+      ("up to %.1f m" % want) in curved.coverage_note, curved.coverage_note)
+
+scaled, scaled_z = terrain(srtm_curvature=True, srtm_sea_level=True, scale=0.01)
+check("curvature follows the unit scale",
+      abs(scaled.max_z_m - curved.max_z_m * 0.01) < 0.01, (scaled.max_z_m, curved.max_z_m))
+
 od.load_tile = lambda *a: None
 check("an area of open sea says so",
       "sea" in (raises(od.export, {"source": "srtm", "bbox": srtm_box, "job_dir": TMP}, quiet)

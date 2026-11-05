@@ -40,6 +40,9 @@ const SOURCE_BASEMAP: Record<Source, BasemapKey> = {
 
 const DEFAULT_OPTIONS: ExportOptions = {
   source: "google",
+  srtmSeaLevel: false,
+  srtmSmooth: false,
+  srtmCurvature: false,
   level: 20,
   levelGround: true,
   groundCellSize: 4,

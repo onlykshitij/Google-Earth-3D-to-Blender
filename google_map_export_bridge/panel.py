@@ -153,6 +153,11 @@ class GMEB_PT_area(_Base, Panel):
         layout.prop(settings, "source")
         if settings.source == "google":
             layout.prop(settings, "level")
+        elif settings.source == "srtm":
+            col = layout.column(align=True)
+            col.prop(settings, "srtm_sea_level")
+            col.prop(settings, "srtm_smooth")
+            col.prop(settings, "srtm_curvature")
 
 
 class GMEB_PT_orientation(_Base, Panel):

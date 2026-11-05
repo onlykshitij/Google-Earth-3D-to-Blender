@@ -231,6 +231,28 @@ export function Sidebar(props: Props) {
         <p className="mt-1.5 text-[11px] leading-snug text-ink-400">
           {SOURCES.find((src) => src.key === options.source)?.hint}
         </p>
+        {options.source === "srtm" && (
+          <div className="mt-1.5 border-t border-white/8 pt-1">
+            <Toggle
+              label="Heights from sea level"
+              hint="Z is the real height above sea level. Off puts the lowest point of the area at Z=0."
+              checked={options.srtmSeaLevel}
+              onChange={(v) => setOptions({ srtmSeaLevel: v })}
+            />
+            <Toggle
+              label="Smooth between points"
+              hint="Blend the four nearest SRTM points instead of taking the nearest one, which removes the one-metre steps."
+              checked={options.srtmSmooth}
+              onChange={(v) => setOptions({ srtmSmooth: v })}
+            />
+            <Toggle
+              label="Earth curvature"
+              hint="Let the ground fall away from the centre as the Earth curves: about 2 m at 5 km, 31 m at 20 km. Only matters for large areas."
+              checked={options.srtmCurvature}
+              onChange={(v) => setOptions({ srtmCurvature: v })}
+            />
+          </div>
+        )}
         {oldForSource && (
           <p className="mt-1.5 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 px-2.5 py-1.5 text-[11px] leading-snug text-[#f7d78a]">
             This Blender's add-on is{" "}
