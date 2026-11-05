@@ -22,7 +22,13 @@ const CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-export type BasemapKey = "dark" | "light" | "streets" | "satellite" | "custom";
+export type BasemapKey =
+  | "dark"
+  | "light"
+  | "streets"
+  | "terrain"
+  | "satellite"
+  | "custom";
 
 export type Basemap = {
   key: BasemapKey;
@@ -32,6 +38,8 @@ export type Basemap = {
   stroke: string;
   /** Extra class on the tile layer. The keyless Dark layer darkens with it. */
   className?: string;
+  /** Deepest zoom the server has tiles for; deeper zooms enlarge those. */
+  maxNativeZoom?: number;
 };
 
 /** Whether a tile address looks usable: http(s), with {z}, {x} and {y}. */
@@ -101,6 +109,16 @@ export function basemapsFor(settings: MapSettings): Basemap[] {
       url: OSM_TILES,
       attribution: OSM_ATTRIBUTION,
       stroke: "#0f3f8c",
+    },
+    {
+      // Contour lines and hill shading from SRTM: a preview of that source.
+      key: "terrain",
+      name: "Terrain",
+      url: "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+      attribution:
+        'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+      stroke: "#c2185b",
+      maxNativeZoom: 17,
     },
     {
       key: "satellite",
@@ -449,7 +467,7 @@ export function MapCanvas({
         attribution={layer.attribution}
         className={layer.className}
         maxZoom={21}
-        maxNativeZoom={19}
+        maxNativeZoom={layer.maxNativeZoom ?? 19}
       />
 
       <MapHandle onReady={onMapReady} onBearing={onBearing} />

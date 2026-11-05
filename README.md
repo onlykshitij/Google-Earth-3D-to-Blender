@@ -326,6 +326,7 @@ fetches from third-party services:
 | Dark, Light | [CARTO basemaps](https://carto.com/basemaps/apikey) | required since September 2026, free up to 5 million tiles a month |
 | Dark without a CARTO key | OpenStreetMap, shaded dark in the browser | none |
 | Streets | OpenStreetMap | none |
+| Terrain | OpenTopoMap, contours and hill shading from SRTM | none |
 | Satellite | Esri World Imagery | none |
 | Custom | any XYZ tile address you give it | whatever that provider needs |
 | Search | Nominatim, or any compatible service | none for the public Nominatim |
@@ -402,6 +403,12 @@ The **Source** card picks where the 3D data comes from:
 Both new sources are fetched by Blender itself, need no key, and arrive level
 with +Y north like the Google model, so the levelling options are hidden for
 them.
+
+Picking a source also switches the map to the layer that shows its data, so the
+area can be drawn against what will actually be exported: **Satellite** for
+Google Earth, **Streets** for OSM buildings (OpenStreetMap draws the building
+outlines), and **Terrain** for SRTM (OpenTopoMap's contours come from SRTM). The
+layer can still be changed afterwards.
 
 **OSM buildings** take their height from the `height` tag, then from
 `building:levels` (and `roof:levels`) at 3 m a level. A building with neither

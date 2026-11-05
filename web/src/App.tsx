@@ -20,11 +20,23 @@ import type {
   Instance,
   MapSettings,
   Session,
+  Source,
 } from "./types";
 import { TERMINAL_PHASES } from "./types";
 import { isEmpty, roundBbox } from "./lib/geo";
 import { envelope, isTilted, roundCorners } from "./lib/area";
 import * as settings from "./lib/settings";
+
+/**
+ * The map layer that shows what each source exports: satellite imagery is the
+ * nearest thing to Google's textures, OpenStreetMap draws the building
+ * outlines, and OpenTopoMap's contours come from SRTM.
+ */
+const SOURCE_BASEMAP: Record<Source, BasemapKey> = {
+  google: "satellite",
+  osm: "streets",
+  srtm: "terrain",
+};
 
 const DEFAULT_OPTIONS: ExportOptions = {
   source: "google",
@@ -87,6 +99,15 @@ export default function App() {
   };
 
   const mapRef = useRef<LeafletMap | null>(null);
+
+  // Show the chosen source's data on the map. Only on a change, so the page
+  // still opens on the default layer, and the layer can be changed afterwards.
+  const shownSource = useRef(options.source);
+  useEffect(() => {
+    if (shownSource.current === options.source) return;
+    shownSource.current = options.source;
+    setBasemap(SOURCE_BASEMAP[options.source]);
+  }, [options.source]);
 
   const setOptions = useCallback((patch: Partial<ExportOptions>) => {
     setOptionsState((prev) => ({ ...prev, ...patch }));

@@ -40,17 +40,17 @@ const SOURCES: { key: Source; label: string; hint: string }[] = [
   {
     key: "google",
     label: "Google Earth",
-    hint: "Textured photogrammetry, where Google has it.",
+    hint: "Textured photogrammetry, where Google has it. The map switches to satellite imagery, the closest match to Google's textures.",
   },
   {
     key: "osm",
     label: "OSM buildings",
-    hint: "OpenStreetMap outlines raised to their mapped heights, with flat roofs and no textures. A building with no height or level count is 6 m tall. Data © OpenStreetMap contributors, ODbL.",
+    hint: "OpenStreetMap outlines raised to their mapped heights, with flat roofs and no textures. A building with no height or level count is 6 m tall. The map switches to OpenStreetMap, which draws the outlines that will be exported. Data © OpenStreetMap contributors, ODbL.",
   },
   {
     key: "srtm",
     label: "SRTM terrain",
-    hint: "NASA elevation about 30 m apart, as one terrain mesh with no buildings. Covers 56°S to 60°N.",
+    hint: "NASA elevation about 30 m apart, as one terrain mesh with no buildings. Covers 56°S to 60°N. The map switches to OpenTopoMap, whose contour lines come from SRTM.",
   },
 ];
 
